@@ -669,7 +669,7 @@ export function Onboarding() {
       spendingBreakdown ?? undefined,
       monthlySpending,
     );
-    navigate('/');
+    navigate('/dashboard');
   };
 
   const stepDescriptions = [

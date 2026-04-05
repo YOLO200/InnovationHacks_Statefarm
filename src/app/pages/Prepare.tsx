@@ -435,7 +435,7 @@ export function Prepare() {
           </div>
 
           <div className="px-6 pb-5 pt-3">
-            <Link to="/crisis"
+            <Link to="/dashboard/crisis"
               className="w-full block text-center text-sm font-bold px-4 py-2.5 rounded-xl text-white transition-opacity hover:opacity-90"
               style={{ background: '#2d3dbd' }}>
               Are you in a crisis? →

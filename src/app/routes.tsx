@@ -7,22 +7,27 @@ import { Spending } from "./pages/Spending";
 import { ClaimGuard } from "./pages/ClaimGuard";
 import { Onboarding } from "./pages/Onboarding";
 import { Settings } from "./pages/Settings";
+import { Landing } from "./pages/Landing";
 
 export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Landing />,
+  },
   {
     path: "/onboarding",
     element: <Onboarding />,
   },
   {
-    path: "/",
+    path: "/dashboard",
     element: <DashboardLayout />,
     children: [
-      { index: true,          element: <Dashboard /> },
-      { path: "prepare",      element: <Prepare /> },
-      { path: "crisis",       element: <CrisisAdvisor /> },
-      { path: "spending",     element: <Spending /> },
-      { path: "claim-guard",  element: <ClaimGuard /> },
-      { path: "settings", element: <Settings /> },
+      { index: true,               element: <Dashboard /> },
+      { path: "prepare",           element: <Prepare /> },
+      { path: "crisis",            element: <CrisisAdvisor /> },
+      { path: "spending",          element: <Spending /> },
+      { path: "claim-guard",       element: <ClaimGuard /> },
+      { path: "settings",          element: <Settings /> },
     ],
   },
 ]);

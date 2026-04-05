@@ -243,7 +243,7 @@ export function Dashboard() {
           <p className={`text-sm leading-relaxed ${verdictConfig.msgColor}`}>{verdictMsg}</p>
         </div>
         <Link
-          to="/prepare"
+          to="/dashboard/prepare"
           className="flex-shrink-0 flex items-center gap-1.5 text-sm font-bold text-white px-4 py-2 rounded-xl transition-colors"
           style={{ background: '#2d3dbd' }}
         >

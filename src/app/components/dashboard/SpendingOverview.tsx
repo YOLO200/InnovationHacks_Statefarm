@@ -19,7 +19,7 @@ export function SpendingOverview() {
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-900">Where Your Money Goes</h2>
-        <Link to="/spending">
+        <Link to="/dashboard/spending">
           <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
             View Details
             <ArrowRight className="w-4 h-4 ml-1" />

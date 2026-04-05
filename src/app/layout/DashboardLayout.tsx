@@ -8,7 +8,7 @@ import { streamCrisisChat } from '../../lib/gemini';
 // ─── NAV ITEMS ────────────────────────────────────────────────────────────────
 const NAV_MAIN = [
   {
-    path: '/',
+    path: '/dashboard',
     label: 'Dashboard',
     icon: (
       <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-4 h-4">
@@ -18,7 +18,7 @@ const NAV_MAIN = [
     ),
   },
   {
-    path: '/prepare',
+    path: '/dashboard/prepare',
     label: 'Prepare',
     icon: (
       <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-4 h-4">
@@ -27,7 +27,7 @@ const NAV_MAIN = [
     ),
   },
   {
-    path: '/crisis',
+    path: '/dashboard/crisis',
     label: 'Crisis Advisor',
     icon: (
       <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-4 h-4">
@@ -36,7 +36,7 @@ const NAV_MAIN = [
     ),
   },
   {
-    path: '/spending',
+    path: '/dashboard/spending',
     label: 'Spending',
     icon: (
       <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-4 h-4">
@@ -49,7 +49,7 @@ const NAV_MAIN = [
 
 const NAV_TOOLS = [
   {
-    path: '/claim-guard',
+    path: '/dashboard/claim-guard',
     label: 'Claim Guard',
     icon: (
       <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-4 h-4">
@@ -61,7 +61,7 @@ const NAV_TOOLS = [
 
 const NAV_ACCOUNT = [
   {
-    path: '/settings',
+    path: '/dashboard/settings',
     label: 'Settings',
     icon: (
       <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-4 h-4">
