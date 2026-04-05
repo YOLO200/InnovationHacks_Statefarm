@@ -1,7 +1,5 @@
 
-  # Financial Dashboard with Animation
-
-  This is a code bundle for Financial Dashboard with Animation. The original project is available at https://www.figma.com/design/w6Jdn4v7RGYSXqDeRjmucK/Financial-Dashboard-with-Animation.
+  # InnovationHacks_Statefarm
 
   ## Running the code
 
