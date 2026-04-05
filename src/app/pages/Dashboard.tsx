@@ -215,13 +215,14 @@ export function Dashboard() {
         </div>
         <h2 className="text-xl font-bold mb-1 relative">{t('ai_title')}</h2>
         <p className="text-sm text-white/60 mb-5 relative">{statementLabel}</p>
-        <div className="grid grid-cols-5 gap-3 relative">
+        <div className="grid grid-cols-6 gap-3 relative">
           {[
-            { labelKey: 'stat_avg_income', subKey: 'stat_sub_avg_income', val: `$${fmt(income.avg_monthly_income)}` },
-            { labelKey: 'stat_avg_spend',  subKey: 'stat_sub_avg_spend',  val: `$${fmt(totalMonthlySpend > 0 ? totalMonthlySpend : financials.fixed_expenses)}` },
-            { labelKey: 'stat_savings',    subKey: 'stat_sub_savings',    val: `$${fmt(financials.savings)}` },
-            { labelKey: 'stat_debt',       subKey: 'stat_sub_debt',       val: `$${fmt(financials.debt_payments)}/mo`, warn: financials.debt_payments > income.avg_monthly_income * 0.2 },
-            { labelKey: 'stat_insurance',  subKey: financials.has_insurance ? 'stat_detected' : 'stat_not_found',
+            { labelKey: 'stat_avg_income',  subKey: 'stat_sub_avg_income', val: `$${fmt(income.avg_monthly_income)}` },
+            { labelKey: 'stat_avg_spend',   subKey: 'stat_sub_avg_spend',  val: `$${fmt(totalMonthlySpend > 0 ? totalMonthlySpend : financials.fixed_expenses)}` },
+            { labelKey: 'stat_savings',     subKey: 'stat_sub_savings',    val: `$${fmt(financials.savings)}` },
+            { labelKey: 'stat_debt',        subKey: 'stat_sub_debt',       val: `$${fmt(financials.debt_payments)}/mo`, warn: financials.debt_payments > income.avg_monthly_income * 0.2 },
+            { labelKey: 'stat_volatility',  subKey: derived.income_volatility_score > 0.5 ? 'stat_sub_vol_high' : derived.income_volatility_score > 0.3 ? 'stat_sub_vol_med' : 'stat_sub_vol_low', val: `${Math.round(derived.income_volatility_score * 100)}%`, warn: derived.income_volatility_score > 0.3 },
+            { labelKey: 'stat_insurance',   subKey: financials.has_insurance ? 'stat_detected' : 'stat_not_found',
               val: financials.has_insurance ? t('stat_covered') : t('stat_none'), warn: !financials.has_insurance },
           ].map(s => (
             <div key={s.labelKey} className="bg-white/10 rounded-xl p-3">
