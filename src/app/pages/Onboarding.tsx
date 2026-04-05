@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Slider } from '../components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Label } from '../components/ui/label';
 import { useAppData } from '../store/AppContext';
 import type { WorkType, IncomeFrequency, DependencyAsset, WorkProfile, IncomeData, FinancialSnapshot, PersonalInfo, HousingSituation } from '../types/financial';
-import { Car, Laptop, Smartphone, Package, ChevronRight, ChevronLeft, Zap, Home, Building2, Users, Upload, CheckCircle2, AlertCircle, Loader2, FileText, Edit3 } from 'lucide-react';
+import { Car, Laptop, Smartphone, Package, ChevronRight, ChevronLeft, Zap, Home, Building2, Users, Upload, CheckCircle2, AlertCircle, FileText, Edit3 } from 'lucide-react';
 
 // ─── STEP 0: PERSONAL INFO ────────────────────────────────────────────────────
 
@@ -200,6 +200,7 @@ function SliderField({ label, value, min, max, step, color, onChange }: {
 
 // ─── STEP 3: BANK STATEMENT UPLOAD ───────────────────────────────────────────
 import { callGemini, QuotaExceededError } from '../lib/gemini';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 type StatementType = 'checking' | 'savings' | 'credit';
 
@@ -317,6 +318,43 @@ interface Step3Props {
   onFinancialsChange: (d: Omit<FinancialSnapshot, 'spending_breakdown'>) => void;
   onSpendingExtracted: (s: FinancialSnapshot['spending_breakdown']) => void;
   onMonthlySpendingExtracted: (ms: { month: string; breakdown: FinancialSnapshot['spending_breakdown'] }[]) => void;
+}
+
+const LOADING_MESSAGES = [
+  'Reading your statements…',
+  'Scanning transactions…',
+  'Crunching the numbers…',
+  'Categorizing expenses…',
+  'Calculating income trends…',
+  'Detecting monthly patterns…',
+  'Estimating tax exposure…',
+  'Building your financial picture…',
+  'Almost there…',
+];
+
+function CyclingText() {
+  const [index, setIndex] = useState(0);
+  const [fade, setFade] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setIndex(i => (i + 1) % LOADING_MESSAGES.length);
+        setFade(true);
+      }, 300);
+    }, 2200);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <p
+      className="text-sm text-gray-500 mt-1 transition-opacity duration-300"
+      style={{ opacity: fade ? 1 : 0 }}
+    >
+      {LOADING_MESSAGES[index]}
+    </p>
+  );
 }
 
 function Step3({ income, financials, onIncomeChange, onFinancialsChange, onSpendingExtracted, onMonthlySpendingExtracted }: Step3Props) {
@@ -522,16 +560,24 @@ function Step3({ income, financials, onIncomeChange, onFinancialsChange, onSpend
         );
       })}
 
-      {allUploaded && status !== 'done' && (
+      {status === 'loading' && (
+        <div className="flex flex-col items-center justify-center py-4">
+          <DotLottieReact
+            src="https://lottie.host/e11c8c44-3ee1-4291-883d-783eb69ebb6d/wkTrzWRhWH.lottie"
+            loop
+            autoplay
+            style={{ width: 120, height: 120 }}
+          />
+          <CyclingText />
+        </div>
+      )}
+
+      {allUploaded && status !== 'done' && status !== 'loading' && (
         <button
           onClick={analyze}
-          disabled={status === 'loading'}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold rounded-xl transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
         >
-          {status === 'loading'
-            ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing 12 months of statements…</>
-            : <><FileText className="w-4 h-4" /> Analyze with AI</>
-          }
+          <FileText className="w-4 h-4" /> Analyze with AI
         </button>
       )}
 

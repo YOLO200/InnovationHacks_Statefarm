@@ -6,7 +6,7 @@ import { Prepare } from "./pages/Prepare";
 import { Spending } from "./pages/Spending";
 import { ClaimGuard } from "./pages/ClaimGuard";
 import { Onboarding } from "./pages/Onboarding";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { Settings } from "./pages/Settings";
 
 export const router = createBrowserRouter([
   {
@@ -22,10 +22,7 @@ export const router = createBrowserRouter([
       { path: "crisis",       element: <CrisisAdvisor /> },
       { path: "spending",     element: <Spending /> },
       { path: "claim-guard",  element: <ClaimGuard /> },
-      {
-        path: "settings",
-        element: <PlaceholderPage title="Settings" description="Customize your Crunch experience." />,
-      },
+      { path: "settings", element: <Settings /> },
     ],
   },
 ]);
