@@ -4,7 +4,6 @@ import { FinancialHealthScore } from '../components/dashboard/FinancialHealthSco
 import { CashRunway } from '../components/dashboard/CashRunway';
 import { IncomeStabilityCard } from '../components/dashboard/IncomeStabilityCard';
 import { SafeBudgetIndicator } from '../components/dashboard/SafeBudgetIndicator';
-import { SpendingAnalysis } from '../components/dashboard/SpendingAnalysis';
 import { AIInsights } from '../components/dashboard/AIInsights';
 
 export function Dashboard() {
@@ -22,10 +21,7 @@ export function Dashboard() {
 
       <SafeBudgetIndicator data={data} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <SpendingAnalysis data={data} />
-        <AIInsights data={data} />
-      </div>
+      <AIInsights data={data} />
     </div>
   );
 }

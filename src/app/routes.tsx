@@ -2,7 +2,6 @@ import { createBrowserRouter } from "react-router";
 import { DashboardLayout } from "./layout/DashboardLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { CrisisAdvisor } from "./pages/CrisisAdvisor";
-import { Scenarios } from "./pages/Scenarios";
 import { Insurance } from "./pages/Insurance";
 import { AICoach } from "./pages/AICoach";
 import { Onboarding } from "./pages/Onboarding";
@@ -36,7 +35,6 @@ export const router = createBrowserRouter([
     children: [
       { index: true,           element: <Dashboard /> },
       { path: "crisis",        element: <CrisisAdvisor /> },
-      { path: "scenarios",     element: <Scenarios /> },
       { path: "spending",      element: <SpendingPage /> },
       { path: "insurance",     element: <Insurance /> },
       { path: "ai-coach",      element: <AICoach /> },
