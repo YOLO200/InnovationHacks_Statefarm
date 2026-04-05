@@ -1,28 +1,30 @@
-import { HeroSection } from '../components/dashboard/HeroSection';
+import { useAppData } from '../store/AppContext';
+import { mockGigWorker } from '../data/mockData';
+import { FinancialHealthScore } from '../components/dashboard/FinancialHealthScore';
 import { CashRunway } from '../components/dashboard/CashRunway';
+import { IncomeStabilityCard } from '../components/dashboard/IncomeStabilityCard';
+import { SafeBudgetIndicator } from '../components/dashboard/SafeBudgetIndicator';
 import { SpendingAnalysis } from '../components/dashboard/SpendingAnalysis';
-import { SpendingOverview } from '../components/dashboard/SpendingOverview';
-import { ScenarioSimulation } from '../components/dashboard/ScenarioSimulation';
-import { InsuranceCoverage } from '../components/dashboard/InsuranceCoverage';
-import { ActionPlan } from '../components/dashboard/ActionPlan';
-import { ActionPlanWithRunway } from '../components/dashboard/ActionPlanWithRunway';
+import { AIInsights } from '../components/dashboard/AIInsights';
 
 export function Dashboard() {
+  const { userData } = useAppData();
+  const data = userData ?? mockGigWorker;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Hero Section */}
-      <HeroSection score={72} status="stable" />
+      <FinancialHealthScore data={data} />
 
-      {/* Two Column Layout - Insurance and Action Plan */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <InsuranceCoverage />
-        <ActionPlanWithRunway savings={8000} monthlyExpenses={1800} />
+        <CashRunway data={data} />
+        <IncomeStabilityCard data={data} />
       </div>
 
-      {/* Two Column Layout - Spending Overview and Scenario Simulation */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SpendingOverview />
-        <ScenarioSimulation />
+      <SafeBudgetIndicator data={data} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <SpendingAnalysis data={data} />
+        <AIInsights data={data} />
       </div>
     </div>
   );

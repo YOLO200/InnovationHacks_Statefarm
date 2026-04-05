@@ -2,70 +2,47 @@ import { createBrowserRouter } from "react-router";
 import { DashboardLayout } from "./layout/DashboardLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { CrisisAdvisor } from "./pages/CrisisAdvisor";
+import { Scenarios } from "./pages/Scenarios";
+import { Insurance } from "./pages/Insurance";
+import { AICoach } from "./pages/AICoach";
+import { Onboarding } from "./pages/Onboarding";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { SpendingAnalysis } from "./components/dashboard/SpendingAnalysis";
-import { Insurance } from "./pages/Insurance";
+import { useAppData } from "./store/AppContext";
+import { mockGigWorker } from "./data/mockData";
+
+// Wrapper to supply mock data to SpendingAnalysis standalone page
+function SpendingPage() {
+  const { userData } = useAppData();
+  return (
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Spending Analysis</h1>
+        <p className="text-gray-500 text-sm">Detailed breakdown of your monthly expenses.</p>
+      </div>
+      <SpendingAnalysis data={userData ?? mockGigWorker} />
+    </div>
+  );
+}
 
 export const router = createBrowserRouter([
+  {
+    path: "/onboarding",
+    element: <Onboarding />,
+  },
   {
     path: "/",
     element: <DashboardLayout />,
     children: [
-      {
-        index: true,
-        element: <Dashboard />,
-      },
-      {
-        path: "crisis",
-        element: <CrisisAdvisor />,
-      },
-      {
-        path: "scenarios",
-        element: (
-          <PlaceholderPage
-            title="Scenarios"
-            description="Run AI-powered financial scenarios to prepare for life's uncertainties."
-          />
-        ),
-      },
-      {
-        path: "spending",
-        element: (
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Spending Analysis
-              </h1>
-              <p className="text-gray-600">
-                Detailed breakdown of your monthly expenses and
-                opportunities to save.
-              </p>
-            </div>
-            <SpendingAnalysis />
-          </div>
-        ),
-      },
-      {
-        path: "insurance",
-        element: <Insurance />,
-      },
-      {
-        path: "insights",
-        element: (
-          <PlaceholderPage
-            title="AI Insights"
-            description="Personalized financial recommendations powered by artificial intelligence."
-          />
-        ),
-      },
+      { index: true,           element: <Dashboard /> },
+      { path: "crisis",        element: <CrisisAdvisor /> },
+      { path: "scenarios",     element: <Scenarios /> },
+      { path: "spending",      element: <SpendingPage /> },
+      { path: "insurance",     element: <Insurance /> },
+      { path: "ai-coach",      element: <AICoach /> },
       {
         path: "settings",
-        element: (
-          <PlaceholderPage
-            title="Settings"
-            description="Customize your Crunch experience and preferences."
-          />
-        ),
+        element: <PlaceholderPage title="Settings" description="Customize your Crunch experience." />,
       },
     ],
   },
