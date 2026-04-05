@@ -95,3 +95,51 @@ export async function callGemini(slot: string, body: object): Promise<string> {
   if (!text) throw new Error('Gemini returned an empty response.');
   return text;
 }
+
+// ─── STREAMING CHAT HELPER ────────────────────────────────────────────────────
+/**
+ * Simulates word-by-word streaming for the AI coach overlay.
+ * Wraps callGemini and delivers tokens via callbacks so callers
+ * don't need to know about the underlying non-streaming API.
+ */
+export async function streamCrisisChat(
+  userMessage: string,
+  topic: string,
+  userCtx: { savings: number; monthlyExpenses: number; hasInsurance: boolean } | null,
+  history: { role: string; content: string }[],
+  onToken: (t: string) => void,
+  onDone: () => void,
+  onError: (e: string) => void,
+) {
+  const systemPrompt = `You are a warm, empathetic, and knowledgeable financial wellness coach specialising in gig worker finances. Topic context: ${topic}.
+${userCtx ? `User context — savings: $${userCtx.savings}, monthly expenses: $${userCtx.monthlyExpenses}, insured: ${userCtx.hasInsurance}.` : ''}
+- Be warm and never condescending
+- Use plain language
+- Give specific, actionable advice
+- Keep responses to 2–4 paragraphs`;
+
+  const contents = [
+    ...history.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    })),
+    { role: 'user', parts: [{ text: userMessage }] },
+  ];
+
+  try {
+    const text = await callGemini('coach', {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents,
+      generationConfig: { maxOutputTokens: 1024 },
+    });
+
+    const words = text.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      onToken((i === 0 ? '' : ' ') + words[i]);
+      await new Promise(r => setTimeout(r, 18));
+    }
+    onDone();
+  } catch (err) {
+    onError((err as Error).message);
+  }
+}

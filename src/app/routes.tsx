@@ -6,7 +6,7 @@ import { Prepare } from "./pages/Prepare";
 import { Spending } from "./pages/Spending";
 import { ClaimGuard } from "./pages/ClaimGuard";
 import { Onboarding } from "./pages/Onboarding";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { Settings } from "./pages/Settings";
 
 export const router = createBrowserRouter([
   {
