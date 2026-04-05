@@ -110,7 +110,7 @@ export function Landing() {
       <main className="flex-1 flex flex-col items-center justify-center text-center px-6 py-16">
 
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold mb-8"
+        <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold mb-8"
           style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.8)' }}>
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
           AI-Powered Financial Wellness for Gig Workers
