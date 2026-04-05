@@ -115,6 +115,10 @@ export function ClaimGuard() {
 
       const analysis = await analyzeEOB(content);
 
+      // Guard against AI returning missing arrays
+      analysis.errors = analysis.errors ?? [];
+      analysis.correct = analysis.correct ?? [];
+
       // Enrich errors with CARC rules data
       const enriched = enrichWithCARCData(analysis.errors);
 

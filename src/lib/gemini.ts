@@ -604,7 +604,14 @@ export async function analyzeEOB(
       if (res.ok) {
         const data = await res.json();
         const raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-        if (raw) return JSON.parse(raw) as EOBAnalysis;
+        if (raw) {
+          try {
+            return JSON.parse(raw) as EOBAnalysis;
+          } catch {
+            // Schema mode occasionally adds extra whitespace/chars — run through cleaner
+            return parseJson<EOBAnalysis>(raw);
+          }
+        }
       }
     } catch (e) {
       if (content.type === 'image') throw e; // Groq can't handle images

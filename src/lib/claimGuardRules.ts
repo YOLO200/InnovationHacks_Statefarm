@@ -252,6 +252,7 @@ export const STATE_DOI: Record<string, StateDOI> = {
 
 /** Detect which US state is mentioned in the EOB text */
 export function detectStateFromText(text: string): string | null {
+  if (!text) return null;
   const upper = text.toUpperCase();
   // Check two-letter state codes in context (e.g. "Chicago IL", "IL 60601")
   for (const code of Object.keys(STATE_DOI)) {
@@ -276,8 +277,11 @@ export function enrichWithCARCData(
     const code = (err.carcCode ?? '').toUpperCase().trim();
     const rule = code ? CARC_RULES[code] : undefined;
     // Check if description mentions preventive care (flags ACA §2713 violation)
-    const descLower = err.description.toLowerCase();
-    const isPreventiveCare = ACA_PREVENTIVE_KEYWORDS.some(k => descLower.includes(k.toLowerCase()));
+    const descLower = (err.description ?? '').toLowerCase();
+    const titleLower = (err.title ?? '').toLowerCase();
+    const isPreventiveCare = ACA_PREVENTIVE_KEYWORDS.some(k =>
+      descLower.includes(k.toLowerCase()) || titleLower.includes(k.toLowerCase())
+    );
     return {
       ...err,
       winRate: rule?.winRate,
