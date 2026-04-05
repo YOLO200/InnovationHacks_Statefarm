@@ -4,19 +4,10 @@ import { Slider } from '../components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Label } from '../components/ui/label';
 import { useAppData } from '../store/AppContext';
-import type { WorkType, IncomeFrequency, DependencyAsset, WorkProfile, IncomeData, FinancialSnapshot } from '../types/financial';
+import type { WorkType, IncomeFrequency, DependencyAsset, WorkProfile, IncomeData, FinancialSnapshot, PersonalInfo, HousingSituation } from '../types/financial';
 import { Car, Laptop, Smartphone, Package, ChevronRight, ChevronLeft, Zap, Home, Building2, Users, Upload, CheckCircle2, AlertCircle, Loader2, FileText, Edit3 } from 'lucide-react';
 
 // ─── STEP 0: PERSONAL INFO ────────────────────────────────────────────────────
-type HousingSituation = 'rent' | 'own' | 'family' | 'other';
-
-interface PersonalInfo {
-  name: string;
-  age: string;
-  email: string;
-  phone: string;
-  housing: HousingSituation;
-}
 
 interface Step0Props { data: PersonalInfo; onChange: (d: PersonalInfo) => void; }
 
@@ -624,6 +615,7 @@ export function Onboarding() {
 
   const handleFinish = () => {
     setUserData(
+      personal,
       profile,
       income,
       { ...financials, spending_breakdown: spendingBreakdown ?? { housing: 0, food: 0, gas: 0, maintenance: 0, phone: 0, insurance: 0, debt: 0, other: 0 } },

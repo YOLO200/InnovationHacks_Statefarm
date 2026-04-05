@@ -1,6 +1,13 @@
 import type { GigWorkerData } from '../types/financial';
 
 export const mockGigWorker: GigWorkerData = {
+  personal: {
+    name: 'Alex Rivera',
+    age: '31',
+    email: 'alex@example.com',
+    phone: '(555) 000-0000',
+    housing: 'rent',
+  },
   profile: {
     work_type: 'rideshare',
     income_frequency: 'daily',

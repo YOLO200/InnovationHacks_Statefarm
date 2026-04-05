@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import type {
-  GigWorkerData, WorkProfile, IncomeData, FinancialSnapshot,
+  GigWorkerData, PersonalInfo, WorkProfile, IncomeData, FinancialSnapshot,
   DerivedMetrics, RiskLevel, SpendingBreakdown, WorkType,
 } from '../types/financial';
 
@@ -18,11 +18,10 @@ export function computeDerived(income: IncomeData, financials: FinancialSnapshot
     : volatility > 0.3 || safeBudget < fixed_expenses * 0.2 ? 'medium'
     : 'low';
 
-  // Health score (0–100)
-  const runwayScore = Math.min((runwayDays / 90) * 35, 35);          // 35 pts → 3-month runway
-  const volatilityScore = Math.max(25 - volatility * 25, 0);         // 25 pts → zero volatility
-  const cushionScore = Math.min((savings / fixed_expenses) * 20, 20); // 20 pts → 1 month saved
-  const insuranceScore = financials.has_insurance ? 20 : 0;           // 20 pts → insured
+  const runwayScore = Math.min((runwayDays / 90) * 35, 35);
+  const volatilityScore = Math.max(25 - volatility * 25, 0);
+  const cushionScore = Math.min((savings / fixed_expenses) * 20, 20);
+  const insuranceScore = financials.has_insurance ? 20 : 0;
   const healthScore = Math.min(Math.round(runwayScore + volatilityScore + cushionScore + insuranceScore), 100);
 
   return { income_volatility_score: volatility, safe_monthly_budget: safeBudget, risk_level: riskLevel, cash_runway_days: runwayDays, financial_health_score: healthScore };
@@ -52,7 +51,14 @@ export function estimateSpending(
 interface AppContextType {
   userData: GigWorkerData | null;
   isOnboarded: boolean;
-  setUserData: (profile: WorkProfile, income: IncomeData, financials: FinancialSnapshot, realSpending?: SpendingBreakdown, monthlySpending?: { month: string; breakdown: SpendingBreakdown }[]) => void;
+  setUserData: (
+    personal: PersonalInfo,
+    profile: WorkProfile,
+    income: IncomeData,
+    financials: FinancialSnapshot,
+    realSpending?: SpendingBreakdown,
+    monthlySpending?: { month: string; breakdown: SpendingBreakdown }[],
+  ) => void;
   resetData: () => void;
 }
 
@@ -67,12 +73,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { return null; }
   });
 
-  const setUserData = (profile: WorkProfile, income: IncomeData, financials: FinancialSnapshot, realSpending?: SpendingBreakdown, monthlySpending: { month: string; breakdown: SpendingBreakdown }[] = []) => {
-    // Use real spending from bank statements if available, otherwise estimate from work type
+  const setUserData = (
+    personal: PersonalInfo,
+    profile: WorkProfile,
+    income: IncomeData,
+    financials: FinancialSnapshot,
+    realSpending?: SpendingBreakdown,
+    monthlySpending: { month: string; breakdown: SpendingBreakdown }[] = [],
+  ) => {
     const spending = realSpending ?? estimateSpending(profile.work_type, financials.fixed_expenses, financials.debt_payments, financials.has_insurance);
     const fullFinancials: FinancialSnapshot = { ...financials, spending_breakdown: spending };
     const derived = computeDerived(income, fullFinancials);
-    const data: GigWorkerData = { profile, income, financials: fullFinancials, derived, monthly_spending: monthlySpending };
+    const data: GigWorkerData = { personal, profile, income, financials: fullFinancials, derived, monthly_spending: monthlySpending };
     setUserDataState(data);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   };
