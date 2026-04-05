@@ -28,7 +28,7 @@ Gig workers earn unpredictably, pay self-employment taxes quarterly, have no emp
 - Available as a full page (`/ai-coach`) and as a floating overlay on every page
 
 ### Read Aloud
-- Every AI response has a speaker button
+- Every AI response has a speaker button to make it more accessible
 - Uses **ElevenLabs** (`eleven_multilingual_v2`) for natural, same-voice multilingual speech
 - Automatically falls back to the browser's Web Speech API if ElevenLabs is unavailable
 - Stop button appears during playback
