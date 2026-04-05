@@ -184,13 +184,14 @@ export function Dashboard() {
         </div>
         <h2 className="text-xl font-bold mb-1 relative">Here's what we found in your statements</h2>
         <p className="text-sm text-white/60 mb-5 relative">{statementLabel}</p>
-        <div className="grid grid-cols-5 gap-3 relative">
+        <div className="grid grid-cols-6 gap-3 relative">
           {[
-            { label: 'Avg monthly income', val: `$${fmt(income.avg_monthly_income)}`,                                                        sub: '12-month average' },
-            { label: 'Avg monthly spend',  val: `$${fmt(totalMonthlySpend > 0 ? totalMonthlySpend : financials.fixed_expenses)}`,             sub: 'All categories' },
-            { label: 'Savings balance',    val: `$${fmt(financials.savings)}`,                                                                sub: 'From savings statement' },
-            { label: 'Debt payments',      val: `$${fmt(financials.debt_payments)}/mo`,                                                       sub: 'Credit & loans', warn: financials.debt_payments > income.avg_monthly_income * 0.2 },
-            { label: 'Insurance',          val: financials.has_insurance ? '✓ Covered' : '✗ None',                                           sub: financials.has_insurance ? 'Detected in statements' : 'Not found — high risk', warn: !financials.has_insurance },
+            { label: 'Avg monthly income',   val: `$${fmt(income.avg_monthly_income)}`,                                                      sub: '12-month average' },
+            { label: 'Avg monthly spend',    val: `$${fmt(totalMonthlySpend > 0 ? totalMonthlySpend : financials.fixed_expenses)}`,           sub: 'All categories' },
+            { label: 'Savings balance',      val: `$${fmt(financials.savings)}`,                                                              sub: 'From savings statement' },
+            { label: 'Debt payments',        val: `$${fmt(financials.debt_payments)}/mo`,                                                     sub: 'Credit & loans', warn: financials.debt_payments > income.avg_monthly_income * 0.2 },
+            { label: 'Income volatility',    val: `${Math.round(derived.income_volatility_score * 100)}%`,                                    sub: derived.income_volatility_score > 0.5 ? 'High — income swings a lot' : derived.income_volatility_score > 0.3 ? 'Moderate swings' : 'Stable income', warn: derived.income_volatility_score > 0.3 },
+            { label: 'Insurance',            val: financials.has_insurance ? '✓ Covered' : '✗ None',                                         sub: financials.has_insurance ? 'Detected in statements' : 'Not found — high risk', warn: !financials.has_insurance },
           ].map(s => (
             <div key={s.label} className="bg-white/10 rounded-xl p-3">
               <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wide mb-1">{s.label}</div>
