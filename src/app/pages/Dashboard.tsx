@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { useAppData } from '../store/AppContext';
 import { useLanguage } from '../store/LanguageContext';
@@ -25,74 +24,6 @@ function deriveSubScores(data: NonNullable<ReturnType<typeof useAppData>['userDa
   return { incomeStability, taxReserveScore, savingsBuffer, coverageScore, estimatedQTax };
 }
 
-// ─── ACTION PLAN ──────────────────────────────────────────────────────────────
-function buildActions(
-  data: NonNullable<ReturnType<typeof useAppData>['userData']>,
-  t: (k: string) => string,
-) {
-  const { derived, income, financials, profile } = data;
-  const actions: { title: string; body: string; tags: { label: string; color: string }[] }[] = [];
-
-  const qTax = Math.round(income.avg_monthly_income * 3 * 0.25);
-  const monthlyTaxSave = Math.round(income.avg_monthly_income * 0.25);
-
-  actions.push({
-    title: fill(t('act_tax_title'), { monthly: fmt(monthlyTaxSave) }),
-    body: fill(t('act_tax_body'), { qTax: fmt(qTax), monthly: fmt(monthlyTaxSave) }),
-    tags: [
-      { label: fill(t('act_tax_tag'), { qTax: fmt(qTax) }), color: 'red' },
-      { label: t('tag_critical'), color: 'amber' },
-    ],
-  });
-
-  if (!financials.has_insurance) {
-    actions.push({
-      title: t('act_ins_title'),
-      body: fill(t('act_ins_body'), { income: fmt(income.avg_monthly_income) }),
-      tags: [
-        { label: t('tag_ins_cost'), color: 'blue' },
-        { label: t('tag_score_pts_20'), color: 'blue' },
-      ],
-    });
-  }
-
-  if (profile.work_type === 'rideshare' || profile.work_type === 'delivery') {
-    actions.push({
-      title: t('act_platform_title'),
-      body: t('act_platform_body'),
-      tags: [
-        { label: t('tag_buffer'), color: 'green' },
-        { label: t('tag_score_pts_8'), color: 'green' },
-      ],
-    });
-  }
-
-  if (derived.cash_runway_days < 45) {
-    const needed = financials.fixed_expenses * 3 - financials.savings;
-    actions.push({
-      title: fill(t('act_fund_title'), { needed: fmt(Math.max(needed, 0)) }),
-      body: fill(t('act_fund_body'), {
-        days: derived.cash_runway_days,
-        goal: fmt(financials.fixed_expenses * 3),
-        months: Math.ceil(needed / 200),
-      }),
-      tags: [
-        { label: fill(t('tag_runway'), { days: derived.cash_runway_days }), color: 'red' },
-        { label: t('tag_high_priority'), color: 'amber' },
-      ],
-    });
-  }
-
-  return actions.slice(0, 4);
-}
-
-// ─── TAG BADGE ────────────────────────────────────────────────────────────────
-const tagColors: Record<string, string> = {
-  red:   'bg-red-100 text-red-700 border border-red-200',
-  amber: 'bg-amber-100 text-amber-700 border border-amber-200',
-  blue:  'bg-blue-100 text-blue-700 border border-blue-200',
-  green: 'bg-green-100 text-green-700 border border-green-200',
-};
 
 // ─── SCORE RING ───────────────────────────────────────────────────────────────
 function ScoreRing({ score }: { score: number }) {
@@ -135,13 +66,10 @@ function SubFactor({ label, value, color }: { label: string; value: number; colo
 export function Dashboard() {
   const { userData } = useAppData();
   const { t } = useLanguage();
-  const [checked, setChecked] = useState<number[]>([]);
-
   if (!userData) return null;
 
   const { income, financials, derived, monthly_spending = [] } = userData;
   const sub = deriveSubScores(userData);
-  const actions = buildActions(userData, t);
 
   const runwayWeeks = Math.round(derived.cash_runway_days / 7);
   const runwayMonths = (derived.cash_runway_days / 30).toFixed(1);
@@ -314,66 +242,18 @@ export function Dashboard() {
           <h3 className={`text-base font-bold mb-1 ${verdictConfig.titleColor}`}>{verdictTitle}</h3>
           <p className={`text-sm leading-relaxed ${verdictConfig.msgColor}`}>{verdictMsg}</p>
         </div>
-        {derived.risk_level !== 'low' && (
-          <Link
-            to="/crisis"
-            className="flex-shrink-0 flex items-center gap-1.5 text-sm font-bold text-white px-4 py-2 rounded-xl transition-colors"
-            style={{ background: '#2d3dbd' }}
-          >
-            {t('crisis_advisor_btn')}
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
-          </Link>
-        )}
+        <Link
+          to="/dashboard/prepare"
+          className="flex-shrink-0 flex items-center gap-1.5 text-sm font-bold text-white px-4 py-2 rounded-xl transition-colors"
+          style={{ background: '#2d3dbd' }}
+        >
+          Prepare for Crisis
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </Link>
       </div>
 
-      {/* ── Do This Now ── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-base font-black text-slate-900">{t('do_this_now')}</span>
-          <span className="text-xs font-bold bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded-full">
-            {fill(t('n_critical'), { n: actions.length })}
-          </span>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          {actions.map((action, i) => {
-            const done = checked.includes(i);
-            return (
-              <div
-                key={i}
-                className={`flex items-start gap-4 px-5 py-4 border-b border-slate-100 last:border-b-0 transition-colors ${done ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
-              >
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5 text-white"
-                  style={{ background: done ? '#22c55e' : '#2d3dbd' }}>
-                  {done ? '✓' : i + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className={`text-sm font-bold mb-1 ${done ? 'line-through text-slate-400' : 'text-slate-900'}`}>
-                    {action.title}
-                  </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed mb-2">{action.body}</p>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {action.tags.map(tag => (
-                      <span key={tag.label} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${tagColors[tag.color]}`}>
-                        {tag.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setChecked(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
-                  className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all ${
-                    done ? 'border-green-500 bg-green-500 text-white text-[10px]' : 'border-slate-300 hover:border-slate-400'
-                  }`}
-                >
-                  {done && '✓'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
     </div>
   );

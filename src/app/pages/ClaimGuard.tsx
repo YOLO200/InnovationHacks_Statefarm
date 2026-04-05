@@ -541,7 +541,7 @@ export function ClaimGuard() {
             <div className="grid grid-cols-2 gap-y-1.5 gap-x-4">
               {[
                 'CARC denial codes & whether they were applied correctly',
-                'ACA §2713 preventive care violations (must be $0)',
+                'ACA 2713 preventive care violations (must be $0)',
                 'Duplicate charges & billing code errors',
                 'Deductible & coinsurance math',
                 'Out-of-network vs in-network rate errors',

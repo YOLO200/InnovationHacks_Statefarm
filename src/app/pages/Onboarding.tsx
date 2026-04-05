@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useNavigate } from 'react-router';
 import { Slider } from '../components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
@@ -200,7 +201,6 @@ function SliderField({ label, value, min, max, step, color, onChange }: {
 
 // ─── STEP 3: BANK STATEMENT UPLOAD ───────────────────────────────────────────
 import { callGemini, QuotaExceededError } from '../lib/gemini';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 type StatementType = 'checking' | 'savings' | 'credit';
 
@@ -319,6 +319,7 @@ interface Step3Props {
   onSpendingExtracted: (s: FinancialSnapshot['spending_breakdown']) => void;
   onMonthlySpendingExtracted: (ms: { month: string; breakdown: FinancialSnapshot['spending_breakdown'] }[]) => void;
 }
+
 
 const LOADING_MESSAGES = [
   'Reading your statements…',
@@ -668,7 +669,7 @@ export function Onboarding() {
       spendingBreakdown ?? undefined,
       monthlySpending,
     );
-    navigate('/');
+    navigate('/dashboard');
   };
 
   const stepDescriptions = [
@@ -719,6 +720,16 @@ export function Onboarding() {
         <p className="text-blue-300 text-xs">
           🔒 Your data is stored locally in your browser and never sent to any server.
         </p>
+
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 text-white/50 hover:text-white/80 text-xs font-semibold transition-colors mt-4"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Back to Home
+        </button>
       </div>
 
       {/* Right panel — form */}

@@ -419,31 +419,45 @@ export async function streamCrisisChat(
   history: { role: string; content: string }[],
   onToken: (t: string) => void,
   onDone: () => void,
-  onError: (e: string) => void
+  onError: (e: string) => void,
+  planSummary?: string,
 ) {
   if (!GEMINI_KEY && !GROQ_KEY) { onError('No AI API key set. Add VITE_GEMINI_API_KEY or VITE_GROQ_API_KEY to your .env file.'); return; }
 
   const dataBlock = userCtx ? `
-User's current financial data:
+User's financial data:
 - Work type: ${userCtx.workType ?? 'gig worker'}
 - Avg monthly income: $${userCtx.avgMonthlyIncome?.toLocaleString() ?? '?'}
 - Lowest monthly income: $${userCtx.lowMonthlyIncome?.toLocaleString() ?? '?'}
 - Monthly expenses: $${userCtx.monthlyExpenses.toLocaleString()}
 - Savings: $${userCtx.savings.toLocaleString()} (${userCtx.runwayDays ?? '?'} days runway)
-- Health score: ${userCtx.healthScore ?? '?'}/100 — ${userCtx.riskLevel ?? '?'} risk
+- Financial health score: ${userCtx.healthScore ?? '?'}/100 — ${userCtx.riskLevel ?? '?'} risk
 - Income volatility: ${userCtx.incomeVolatility != null ? Math.round(userCtx.incomeVolatility * 100) + '%' : '?'}
-- Insurance: ${userCtx.hasInsurance ? 'yes' : 'no'}` : 'No financial data available.';
+- Insurance: ${userCtx.hasInsurance ? 'yes' : 'no'}
+- Monthly surplus/deficit in worst month: $${userCtx.avgMonthlyIncome && userCtx.monthlyExpenses ? (userCtx.lowMonthlyIncome ?? userCtx.avgMonthlyIncome) - userCtx.monthlyExpenses : '?'}` : 'No financial data available.';
 
-  const systemPrompt = `You are Crunch Guide, a financial crisis prevention assistant for gig workers.
-${crisisTitle !== 'General Financial Coaching' ? `Context: the user is dealing with "${crisisTitle}".` : ''}
+  const planBlock = planSummary ? `\nCrisis plan already generated:\n${planSummary}` : '';
+
+  const systemPrompt = `You are Crunch Guide, a warm and knowledgeable financial coach for gig workers.
+${crisisTitle !== 'General Financial Coaching' ? `The user is dealing with: "${crisisTitle}".` : ''}
 ${dataBlock}
+${planBlock}
 
-Only answer using the user's data above. Never guess or hallucinate. If data is missing say: "I can't verify that from your current data."
+Your job:
+- Answer questions about the user's specific financial situation using their data above
+- Help them understand their crisis plan, runway, spending, and what to do next
+- Guide them on how to improve their financial health score step by step
+- Answer questions about financial aid, bill negotiation, rent hardship, documents needed, and practical next steps
+- Be gentle, empathetic, and never condescending
+- If asked how to improve their score, give 1–2 specific actions based on their actual numbers
 
-Help with: runway, spending pressure, volatility, bills, what to do today, whether things are improving, dashboard numbers.
-Do NOT help with: insurance product recommendations, investment advice, legal advice, tax filing advice, medical advice, or anything unrelated to the user's financial situation. If asked, reply: "That's outside what I can help with. Ask me about your runway, spending, or what to do today."
+Rules:
+- Always reference the user's real numbers (savings, expenses, runway) when relevant
+- Never hallucinate data — if something is unknown say "I don't have that info from your profile"
+- Do NOT give investment, legal, medical, or tax filing advice
+- Keep answers to 2–4 sentences max with one clear action item
 
-Style: plain English, direct, 1–4 sentences max, one practical action when relevant. Be brief — never exceed 4 sentences.`;
+Tone: warm, direct, practical. Like a knowledgeable friend, not a robot.`;
 
   const contents = [
     ...history.map(m => ({
