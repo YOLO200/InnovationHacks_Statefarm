@@ -720,6 +720,16 @@ export function Onboarding() {
         <p className="text-blue-300 text-xs">
           🔒 Your data is stored locally in your browser and never sent to any server.
         </p>
+
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 text-white/50 hover:text-white/80 text-xs font-semibold transition-colors mt-4"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Back to Home
+        </button>
       </div>
 
       {/* Right panel — form */}
