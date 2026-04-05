@@ -2,26 +2,15 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Target, TrendingUp, CheckCircle2, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
+import type { SurvivalOptimization } from '../../../lib/gemini';
 
-const optimizations = [
-  {
-    action: 'Reduce discretionary spending',
-    impact: '+0.5 months',
-    items: ['Pause streaming services', 'Limit dining out', 'Postpone non-essential purchases'],
-  },
-  {
-    action: 'Shift to low-cost care options',
-    impact: '+0.4 months',
-    items: ['Use urgent care vs ER', 'Generic medications', 'Telehealth consultations'],
-  },
-  {
-    action: 'Apply for financial aid',
-    impact: '+0.3 months',
-    items: ['Hospital assistance programs', 'Community health resources', 'Government aid'],
-  },
-];
+interface SurvivalPlanProps {
+  optimizations?: SurvivalOptimization[];
+  runoutMonths?: number;
+  extendedMonths?: number;
+}
 
-export function SurvivalPlan() {
+export function SurvivalPlan({ optimizations = [], runoutMonths = 0, extendedMonths = 0 }: SurvivalPlanProps) {
   return (
     <Card className="p-6 border-2 border-green-200 bg-gradient-to-br from-green-50 to-emerald-50">
       <div className="flex items-center justify-between mb-6">
@@ -34,13 +23,13 @@ export function SurvivalPlan() {
             <p className="text-sm text-gray-600">AI-generated recovery strategy</p>
           </div>
         </div>
-        
+
         <div className="text-right">
           <p className="text-sm text-gray-600">Extended Runway</p>
           <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-red-600 line-through">2.3</span>
+            <span className="text-xl font-bold text-red-600 line-through">{runoutMonths.toFixed(1)}</span>
             <ArrowRight className="w-4 h-4 text-gray-400" />
-            <span className="text-2xl font-bold text-green-600">3.5 months</span>
+            <span className="text-2xl font-bold text-green-600">{extendedMonths.toFixed(1)} months</span>
           </div>
         </div>
       </div>
@@ -59,14 +48,14 @@ export function SurvivalPlan() {
                 <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
                 <h4 className="font-semibold text-gray-900">{opt.action}</h4>
               </div>
-              <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-bold rounded-full">
+              <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-bold rounded-full flex-shrink-0 ml-2">
                 {opt.impact}
               </span>
             </div>
             <ul className="ml-7 space-y-1">
               {opt.items.map((item, i) => (
                 <li key={i} className="text-sm text-gray-600 flex items-center gap-2">
-                  <span className="w-1 h-1 bg-green-600 rounded-full"></span>
+                  <span className="w-1 h-1 bg-green-600 rounded-full flex-shrink-0" />
                   {item}
                 </li>
               ))}

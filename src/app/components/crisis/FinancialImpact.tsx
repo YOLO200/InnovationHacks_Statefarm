@@ -1,18 +1,25 @@
 import { Card } from '../ui/card';
-import { DollarSign, TrendingDown, Wallet } from 'lucide-react';
+import { DollarSign } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 import { motion } from 'motion/react';
+import type { FinancialImpactData } from '../../../lib/gemini';
 
-const impactData = [
-  { name: 'Savings', amount: 8000, color: '#10b981' },
-  { name: 'Expense', amount: 3000, color: '#ef4444' },
-  { name: 'Remaining', amount: 5000, color: '#3b82f6' },
-];
+interface FinancialImpactProps {
+  data?: FinancialImpactData;
+  savings?: number;
+}
 
-export function FinancialImpact() {
-  const estimatedCost = { min: 5000, max: 12000 };
-  const insuranceCoverage = 40;
-  const outOfPocket = 3000;
+export function FinancialImpact({ data, savings = 0 }: FinancialImpactProps) {
+  const estimatedCost = { min: data?.estimatedCostMin ?? 0, max: data?.estimatedCostMax ?? 0 };
+  const insuranceCoverage = data?.insuranceCoveragePercent ?? 0;
+  const outOfPocket = data?.outOfPocket ?? 0;
+  const remaining = Math.max(savings - outOfPocket, 0);
+
+  const chartData = [
+    { name: 'Savings',   amount: savings,    color: '#10b981' },
+    { name: 'Expense',   amount: outOfPocket, color: '#ef4444' },
+    { name: 'Remaining', amount: remaining,   color: '#3b82f6' },
+  ];
 
   return (
     <Card className="p-6">
@@ -63,12 +70,12 @@ export function FinancialImpact() {
       <div className="p-4 bg-gray-50 rounded-xl">
         <p className="text-sm text-gray-600 mb-3 font-medium">Savings vs Expense Comparison</p>
         <ResponsiveContainer width="100%" height={150}>
-          <BarChart data={impactData}>
+          <BarChart data={chartData}>
             <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
             <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
             <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
-              {impactData.map((entry, index) => (
-                <Cell key={`impact-cell-${index}-${entry.name}`} fill={entry.color} />
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Bar>
           </BarChart>

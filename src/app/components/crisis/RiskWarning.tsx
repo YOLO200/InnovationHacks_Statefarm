@@ -2,9 +2,11 @@ import { Card } from '../ui/card';
 import { AlertTriangle, TrendingDown } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export function RiskWarning() {
-  const runoutMonths = 2.3;
+interface RiskWarningProps {
+  runoutMonths?: number;
+}
 
+export function RiskWarning({ runoutMonths = 0 }: RiskWarningProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -20,14 +22,14 @@ export function RiskWarning() {
           >
             <AlertTriangle className="w-6 h-6 text-white" />
           </motion.div>
-          
+
           <div className="flex-1">
             <h3 className="text-xl font-bold mb-2">Critical Risk Warning</h3>
             <div className="flex items-baseline gap-2 mb-3">
               <TrendingDown className="w-5 h-5" />
               <p className="text-lg">
                 You may run out of savings in{' '}
-                <span className="font-bold text-2xl">{runoutMonths} months</span>
+                <span className="font-bold text-2xl">{runoutMonths.toFixed(1)} months</span>
                 {' '}after this event
               </p>
             </div>

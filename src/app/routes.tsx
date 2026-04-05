@@ -17,12 +17,15 @@ export const router = createBrowserRouter([
     path: "/",
     element: <DashboardLayout />,
     children: [
-      { index: true,         element: <Dashboard /> },
-      { path: "prepare",     element: <Prepare /> },
-      { path: "crisis",      element: <CrisisAdvisor /> },
-      { path: "spending",    element: <Spending /> },
-      { path: "claim-guard", element: <ClaimGuard /> },
-      { path: "settings",    element: <Settings /> },
+      { index: true,          element: <Dashboard /> },
+      { path: "prepare",      element: <Prepare /> },
+      { path: "crisis",       element: <CrisisAdvisor /> },
+      { path: "spending",     element: <Spending /> },
+      { path: "claim-guard",  element: <ClaimGuard /> },
+      {
+        path: "settings",
+        element: <PlaceholderPage title="Settings" description="Customize your Crunch experience." />,
+      },
     ],
   },
 ]);
