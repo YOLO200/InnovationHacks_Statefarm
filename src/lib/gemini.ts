@@ -8,6 +8,67 @@ export class QuotaExceededError extends Error {
   constructor() { super('Gemini API quota exceeded.'); }
 }
 
+// Cleans up common AI JSON output issues before parsing
+export function cleanJson(raw: string): string {
+  // Strip markdown code fences
+  let s = raw.replace(/```[\w]*\n?/g, '').trim();
+  // Extract the outermost { ... } block
+  const start = s.indexOf('{');
+  const end   = s.lastIndexOf('}');
+  if (start !== -1 && end !== -1) s = s.slice(start, end + 1);
+  // Collapse literal newlines/tabs to spaces so they don't break JSON string values
+  // (JSON.parse rejects unescaped \n inside string literals)
+  s = s.replace(/[\r\n\t]+/g, ' ');
+  // Remove trailing commas before } or ]
+  s = s.replace(/,\s*([}\]])/g, '$1');
+  // Replace smart/curly quotes with straight quotes
+  s = s.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+  // Repair unescaped inner double-quotes inside JSON string values.
+  // Walk char-by-char tracking string context; replace rogue " with '
+  s = repairInnerQuotes(s);
+  return s;
+}
+
+function repairInnerQuotes(s: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) { out += ch; escaped = false; continue; }
+    if (ch === '\\') { out += ch; escaped = true; continue; }
+    if (ch === '"') {
+      if (!inString) {
+        inString = true;
+        out += ch;
+      } else {
+        // Peek ahead past whitespace to decide if this closes the string
+        let j = i + 1;
+        while (j < s.length && s[j] === ' ') j++;
+        const next = s[j] ?? '';
+        if (next === ':' || next === ',' || next === '}' || next === ']' || j >= s.length) {
+          inString = false;
+          out += ch; // legitimate closing quote
+        } else {
+          out += "'"; // inner quote — replace with single quote
+        }
+      }
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+function parseJson<T>(raw: string): T {
+  const cleaned = cleanJson(raw);
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (e) {
+    throw new Error(`JSON parse failed: ${(e as Error).message}. Raw snippet: ${cleaned.slice(0, 300)}`);
+  }
+}
+
 // Internal: call Groq with a plain text prompt, returns text
 async function callGroqText(prompt: string, maxTokens = 8192): Promise<string> {
   if (!GROQ_KEY) throw new Error('VITE_GROQ_API_KEY not set.');
@@ -215,28 +276,135 @@ Rules:
     }
   );
 
+  let rawText = '';
   if (!res.ok) {
-    // Gemini failed — fall back to Groq
     console.warn('[Gemini] analyzeCrisis failed, trying Groq');
-    const groqText = await callGroqText(prompt, 8192);
-    const match = groqText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error(`Groq response unparseable. Raw: ${groqText.slice(0, 200)}`);
-    return JSON.parse(match[0]) as CrisisAIResponse;
+    rawText = await callGroqText(prompt, 8192);
+  } else {
+    const data = await res.json();
+    rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   }
 
-  const data = await res.json();
-  const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  if (!text) throw new Error('No response from Gemini.');
+  if (!rawText) throw new Error('No response from AI.');
+  return parseJson<CrisisAIResponse>(rawText);
+}
 
-  // Extract JSON — handles markdown code blocks and any surrounding text
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error(`Could not parse AI response. Raw: ${text.slice(0, 200)}`);
+// ─── PREPARE PAGE RECOMMENDATIONS ────────────────────────────────────────────
+export interface PrepTask {
+  title: string;
+  description: string;
+  time: string;
+  impact: 'Critical' | 'High' | 'Medium';
+}
 
-  try {
-    return JSON.parse(jsonMatch[0]) as CrisisAIResponse;
-  } catch {
-    throw new Error(`JSON parse failed. Raw: ${jsonMatch[0].slice(0, 200)}`);
-  }
+export interface PrepSpendingCut {
+  category: string;
+  current: number;
+  target: number;
+  saving: number;
+  tip: string;
+}
+
+export interface PrepCoverageGap {
+  name: string;
+  covered: boolean;
+  risk: string;
+  fix: string;
+  urgency: 'critical' | 'high' | 'medium';
+}
+
+export interface PrepPlatformTip {
+  title: string;
+  body: string;
+}
+
+export interface PrepareRecommendations {
+  tasks: PrepTask[];
+  spendingCuts: PrepSpendingCut[];
+  coverageGaps: PrepCoverageGap[];
+  platformTips: PrepPlatformTip[];
+}
+
+export async function generatePrepareRecommendations(ctx: {
+  workType: string;
+  avgMonthlyIncome: number;
+  lowMonthlyIncome: number;
+  highMonthlyIncome: number;
+  savings: number;
+  fixedExpenses: number;
+  debtPayments: number;
+  hasInsurance: boolean;
+  cashRunwayDays: number;
+  incomeVolatility: number;
+  spending: Record<string, number>;
+}): Promise<PrepareRecommendations> {
+  if (!GEMINI_KEY && !GROQ_KEY) throw new Error('No AI API key configured.');
+
+  const spendingLines = Object.entries(ctx.spending)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `  ${k}: $${v.toLocaleString()}/mo`)
+    .join('\n');
+
+  const prompt = `You are a financial advisor AI for gig workers. Generate fully personalized recommendations based ONLY on the data below — no generic advice.
+
+USER DATA:
+- Work type: ${ctx.workType}
+- Avg monthly income: $${ctx.avgMonthlyIncome.toLocaleString()}
+- Income range: $${ctx.lowMonthlyIncome.toLocaleString()}–$${ctx.highMonthlyIncome.toLocaleString()}/mo
+- Income volatility: ${Math.round(ctx.incomeVolatility * 100)}%
+- Savings: $${ctx.savings.toLocaleString()}
+- Fixed expenses: $${ctx.fixedExpenses.toLocaleString()}/mo
+- Debt payments: $${ctx.debtPayments.toLocaleString()}/mo
+- Has health insurance: ${ctx.hasInsurance ? 'Yes' : 'No'}
+- Cash runway: ${ctx.cashRunwayDays} days (${(ctx.cashRunwayDays / 30).toFixed(1)} months)
+- Monthly spending breakdown:
+${spendingLines}
+
+Return ONLY a valid JSON object (no markdown, no code fences, start with {, end with }):
+{
+  "tasks": [
+    {
+      "title": "Specific action with real dollar amounts from their data",
+      "description": "2–3 sentences using their exact numbers. No generic advice.",
+      "time": "X min",
+      "impact": "Critical"
+    }
+  ],
+  "spendingCuts": [
+    {
+      "category": "Category name",
+      "current": 0,
+      "target": 0,
+      "saving": 0,
+      "tip": "Specific tip referencing their actual spending amount"
+    }
+  ],
+  "coverageGaps": [
+    {
+      "name": "Coverage type",
+      "covered": false,
+      "risk": "Specific risk in dollars based on their income/savings",
+      "fix": "Specific actionable fix with estimated cost",
+      "urgency": "critical"
+    }
+  ],
+  "platformTips": [
+    {
+      "title": "Specific tip title for their work type",
+      "body": "Detailed tip using their actual income numbers"
+    }
+  ]
+}
+
+Rules:
+- tasks: exactly 4 items. impact must be "Critical", "High", or "Medium". Order by urgency. Every title and description must reference their specific dollar amounts.
+- spendingCuts: 2–4 items. Only flag categories where current spend is above healthy % of their income. current and target are monthly dollar amounts. saving = current - target. If all spending is healthy, still return 2 items with saving: 0 and a tip about maintaining their discipline.
+- coverageGaps: exactly 3 items specific to their work type (${ctx.workType}). covered is true only for health insurance if hasInsurance is true. urgency must be "critical", "high", or "medium".
+- platformTips: exactly 3 tips tailored specifically for ${ctx.workType} workers at $${ctx.avgMonthlyIncome.toLocaleString()}/mo income. Reference their actual income in at least 2 tips.
+- Return ONLY the JSON object, nothing else.`;
+
+  const raw = await callTextModel(prompt);
+  return parseJson<PrepareRecommendations>(raw);
 }
 
 // ─── FOLLOW-UP CHAT ───────────────────────────────────────────────────────────
@@ -297,6 +465,216 @@ Give specific, actionable, empathetic advice. Keep responses concise (2–3 shor
     for (let i = 0; i < words.length; i++) {
       onToken((i === 0 ? '' : ' ') + words[i]);
       await new Promise(r => setTimeout(r, 18));
+    }
+    onDone();
+  } catch {
+    onError('Network error. Check your connection.');
+  }
+}
+
+// ─── CLAIM GUARD — EOB ANALYSIS ───────────────────────────────────────────────
+
+export interface EOBError {
+  title: string;
+  description: string;
+  impact: string;
+  carcCode: string;
+}
+export interface EOBCorrect {
+  title: string;
+  description: string;
+}
+export interface EOBAnalysis {
+  claimId: string;
+  claimDate: string;
+  totalOvercharge: number;
+  detectedInsurer: string;
+  detectedState: string;
+  errors: EOBError[];
+  correct: EOBCorrect[];
+  summary: string;
+}
+
+// JSON schema that Gemini enforces natively — no parsing errors possible
+const EOB_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    claimId:          { type: 'STRING' },
+    claimDate:        { type: 'STRING' },
+    totalOvercharge:  { type: 'NUMBER' },
+    detectedInsurer:  { type: 'STRING' },
+    detectedState:    { type: 'STRING' },
+    errors: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title:       { type: 'STRING' },
+          description: { type: 'STRING' },
+          impact:      { type: 'STRING' },
+          carcCode:    { type: 'STRING' },
+        },
+        required: ['title', 'description', 'impact', 'carcCode'],
+      },
+    },
+    correct: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title:       { type: 'STRING' },
+          description: { type: 'STRING' },
+        },
+        required: ['title', 'description'],
+      },
+    },
+    summary: { type: 'STRING' },
+  },
+  required: ['claimId', 'claimDate', 'totalOvercharge', 'detectedInsurer', 'detectedState', 'errors', 'correct', 'summary'],
+};
+
+const EOB_SYSTEM_PROMPT = `You are an expert insurance billing analyst. Carefully read this Explanation of Benefits (EOB), denial letter, or medical bill.
+
+Find ALL billing errors, incorrect denials, wrong calculations, and overcharges. For each issue found:
+1. Identify the CARC code if present (e.g. CO-50, OA-23, PR-1) — put it in carcCode field, or empty string if none
+2. Explain what the error is in plain English
+3. Cite the specific rule, billing code, or policy clause
+4. State the exact financial impact
+
+Also note any items that were processed correctly.
+
+Rules:
+- detectedInsurer: name of the insurance company from the document, or empty string
+- detectedState: 2-letter US state code detected from the document (e.g. IL, AZ, CA), or empty string
+- totalOvercharge: total dollar amount the patient was overcharged (0 if none confirmed)
+- carcCode: the CARC/RARC reason code from the denial (e.g. CO-50, OA-23), or empty string
+- summary: one clear sentence — what the patient actually owes vs what they were charged`;
+
+export async function analyzeEOB(
+  content: { type: 'text'; text: string } | { type: 'image'; base64: string; mimeType: string }
+): Promise<EOBAnalysis> {
+  if (!GEMINI_KEY && !GROQ_KEY) throw new Error('No AI API key set. Add VITE_GEMINI_API_KEY or VITE_GROQ_API_KEY to your .env file.');
+
+  // ── Gemini path (JSON schema mode — guaranteed valid JSON output) ──
+  if (GEMINI_KEY) {
+    try {
+      const parts = content.type === 'image'
+        ? [{ text: EOB_SYSTEM_PROMPT }, { inlineData: { mimeType: content.mimeType, data: content.base64 } }]
+        : [{ text: `${EOB_SYSTEM_PROMPT}\n\nDocument text:\n${content.text}` }];
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 8192,
+              responseMimeType: 'application/json',
+              responseSchema: EOB_RESPONSE_SCHEMA,
+            },
+          }),
+        }
+      );
+      if (res.status === 429) throw new QuotaExceededError();
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        if (raw) return JSON.parse(raw) as EOBAnalysis;
+      }
+    } catch (e) {
+      if (content.type === 'image') throw e; // Groq can't handle images
+      console.warn('[Gemini] analyzeEOB failed, trying Groq:', (e as Error).message);
+    }
+  }
+
+  // ── Groq fallback (text-only) ──
+  if (content.type === 'image') throw new Error('Gemini API unavailable and Groq cannot process images. Add VITE_GEMINI_API_KEY to your .env.');
+  if (!GROQ_KEY) throw new Error('No API key available. Add VITE_GEMINI_API_KEY or VITE_GROQ_API_KEY to your .env.');
+
+  const prompt = `${EOB_SYSTEM_PROMPT}
+
+Document text:
+${content.text}
+
+Return ONLY a raw JSON object. Start with { and end with }. No markdown fences, no extra text.
+Use single quotes inside string values if you need quotes (never double-quotes inside strings).`;
+
+  const raw = await callGroqText(prompt, 8192);
+  return parseJson<EOBAnalysis>(raw);
+}
+
+// ─── CLAIM GUARD — CHATBOT ────────────────────────────────────────────────────
+
+export async function streamClaimChat(
+  question: string,
+  eobContext: { analysis: EOBAnalysis; originalText: string },
+  history: { role: string; content: string }[],
+  onToken: (t: string) => void,
+  onDone: () => void,
+  onError: (e: string) => void
+): Promise<void> {
+  if (!GEMINI_KEY && !GROQ_KEY) { onError('No AI API key set.'); return; }
+
+  const { analysis, originalText } = eobContext;
+  const errorSummary = analysis.errors.length > 0
+    ? analysis.errors.map((e, i) => `${i + 1}. ${e.title}${e.carcCode ? ` (${e.carcCode})` : ''}: ${e.impact}`).join('\n')
+    : 'No errors found.';
+
+  const systemPrompt = `You are ClaimGuard, a friendly insurance literacy assistant. You help people understand their insurance documents in plain English.
+
+EOB CONTEXT:
+- Claim ID: ${analysis.claimId || 'not found'}
+- Insurer: ${analysis.detectedInsurer || 'not detected'}
+- State: ${analysis.detectedState || 'not detected'}
+- Total overcharge found: $${analysis.totalOvercharge.toLocaleString()}
+- Errors flagged: ${errorSummary}
+- Summary: ${analysis.summary}
+${originalText ? `\nOriginal document excerpt:\n${originalText.slice(0, 600)}` : ''}
+
+Rules:
+- Answer ONLY about their specific document and the errors found
+- Explain in plain English — no jargon without explanation
+- If asked about legal action ("can I sue"), say: "I can't give legal advice, but here is the appeal process..."
+- Keep answers concise (2–3 short paragraphs max)
+- If asked about a different claim, say "Please start a new analysis for that document"`;
+
+  const contents = [
+    ...history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+    { role: 'user', parts: [{ text: question }] },
+  ];
+
+  let text = '';
+  try {
+    if (GEMINI_KEY) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents,
+            generationConfig: { maxOutputTokens: 1024 },
+          }),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      }
+    }
+    if (!text && GROQ_KEY) {
+      text = await callGroqText(`${systemPrompt}\n\nUser: ${question}`, 1024);
+    }
+    if (!text) { onError('No response received.'); return; }
+
+    const words = text.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      onToken((i === 0 ? '' : ' ') + words[i]);
+      await new Promise(r => setTimeout(r, 15));
     }
     onDone();
   } catch {
