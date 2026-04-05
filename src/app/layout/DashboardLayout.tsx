@@ -1,13 +1,12 @@
 import { useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
-import { Bell, User, LayoutDashboard, Layers, Wallet, Shield, Settings, AlertCircle, MessageSquare, LogOut } from 'lucide-react';
+import { Bell, User, LayoutDashboard, Wallet, Shield, Settings, AlertCircle, MessageSquare, LogOut } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { useAppData } from '../store/AppContext';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard',    path: '/' },
   { icon: AlertCircle,     label: 'Crisis Advisor', path: '/crisis', highlight: true },
-  { icon: Layers,          label: 'Scenarios',    path: '/scenarios' },
   { icon: Wallet,          label: 'Spending',     path: '/spending' },
   { icon: Shield,          label: 'Insurance',    path: '/insurance' },
   { icon: MessageSquare,   label: 'AI Coach',     path: '/ai-coach' },

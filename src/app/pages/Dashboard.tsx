@@ -1,10 +1,6 @@
 import { useAppData } from '../store/AppContext';
 import { mockGigWorker } from '../data/mockData';
 import { FinancialHealthScore } from '../components/dashboard/FinancialHealthScore';
-import { CashRunway } from '../components/dashboard/CashRunway';
-import { IncomeStabilityCard } from '../components/dashboard/IncomeStabilityCard';
-import { SafeBudgetIndicator } from '../components/dashboard/SafeBudgetIndicator';
-import { SpendingAnalysis } from '../components/dashboard/SpendingAnalysis';
 import { AIInsights } from '../components/dashboard/AIInsights';
 
 export function Dashboard() {
@@ -15,17 +11,7 @@ export function Dashboard() {
     <div className="max-w-7xl mx-auto space-y-6">
       <FinancialHealthScore data={data} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CashRunway data={data} />
-        <IncomeStabilityCard data={data} />
-      </div>
-
-      <SafeBudgetIndicator data={data} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <SpendingAnalysis data={data} />
-        <AIInsights data={data} />
-      </div>
+      <AIInsights data={data} />
     </div>
   );
 }
