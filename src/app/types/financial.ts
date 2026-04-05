@@ -2,6 +2,15 @@ export type WorkType = 'rideshare' | 'delivery' | 'freelance' | 'contract';
 export type IncomeFrequency = 'daily' | 'weekly' | 'mixed';
 export type DependencyAsset = 'car' | 'laptop' | 'phone' | 'physical' | 'none';
 export type RiskLevel = 'low' | 'medium' | 'high';
+export type HousingSituation = 'rent' | 'own' | 'family' | 'other';
+
+export interface PersonalInfo {
+  name: string;
+  age: string;
+  email: string;
+  phone: string;
+  housing: HousingSituation;
+}
 
 export interface WorkProfile {
   work_type: WorkType;
@@ -48,6 +57,7 @@ export interface MonthlySpending {
 }
 
 export interface GigWorkerData {
+  personal: PersonalInfo;
   profile: WorkProfile;
   income: IncomeData;
   financials: FinancialSnapshot;

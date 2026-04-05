@@ -5,7 +5,7 @@ import { CrisisAdvisor } from "./pages/CrisisAdvisor";
 import { Insurance } from "./pages/Insurance";
 import { AICoach } from "./pages/AICoach";
 import { Onboarding } from "./pages/Onboarding";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { Settings } from "./pages/Settings";
 import { SpendingAnalysis } from "./components/dashboard/SpendingAnalysis";
 import { useAppData } from "./store/AppContext";
 import { mockGigWorker } from "./data/mockData";
@@ -38,10 +38,7 @@ export const router = createBrowserRouter([
       { path: "spending",      element: <SpendingPage /> },
       { path: "insurance",     element: <Insurance /> },
       { path: "ai-coach",      element: <AICoach /> },
-      {
-        path: "settings",
-        element: <PlaceholderPage title="Settings" description="Customize your Crunch experience." />,
-      },
+      { path: "settings", element: <Settings /> },
     ],
   },
 ]);
