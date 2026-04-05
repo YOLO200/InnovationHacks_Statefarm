@@ -1,83 +1,89 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useAppData } from '../store/AppContext';
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-const WORK_LABELS: Record<string, string> = {
-  rideshare: 'Rideshare Driver',
-  delivery: 'Delivery Worker',
-  freelance: 'Freelancer',
-  contract: 'Contractor',
-};
+import { useLanguage } from '../store/LanguageContext';
 
 function fmt(n: number) { return n.toLocaleString(); }
-function fmtK(n: number) { return n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${fmt(n)}`; }
 
-// ─── SUB-FACTOR SCORES derived from computeDerived inputs ─────────────────────
+// Fill {placeholder} tokens in a translated string
+function fill(str: string, vars: Record<string, string | number>) {
+  return Object.entries(vars).reduce(
+    (s, [k, v]) => s.replaceAll(`{${k}}`, String(v)),
+    str
+  );
+}
+
+// ─── SUB-FACTOR SCORES ────────────────────────────────────────────────────────
 function deriveSubScores(data: NonNullable<ReturnType<typeof useAppData>['userData']>) {
   const { derived, income, financials } = data;
-
-  // Income stability: 0-100 (inverted volatility)
   const incomeStability = Math.max(0, Math.round(100 - derived.income_volatility_score * 80));
-
-  // Tax reserve: gig workers should set aside ~25% of avg income per quarter
-  // We have no separate tax account so score is always 0 unless savings > 1 month expenses * 1.25
-  const estimatedQTax = Math.round(income.avg_monthly_income * 3 * 0.25);
   const taxReserveScore = financials.savings > financials.fixed_expenses * 4 ? 60 : 0;
-
-  // Savings buffer: savings vs 6-month goal
   const sixMonthGoal = financials.fixed_expenses * 6;
   const savingsBuffer = Math.min(100, Math.round((financials.savings / sixMonthGoal) * 100));
-
-  // Coverage gaps: 100 if insured, 25 if not
   const coverageScore = financials.has_insurance ? 75 : 25;
-
+  const estimatedQTax = Math.round(income.avg_monthly_income * 3 * 0.25);
   return { incomeStability, taxReserveScore, savingsBuffer, coverageScore, estimatedQTax };
 }
 
-// "Do this now" — dynamically built from real gaps
-function buildActions(data: NonNullable<ReturnType<typeof useAppData>['userData']>) {
+// ─── ACTION PLAN ──────────────────────────────────────────────────────────────
+function buildActions(
+  data: NonNullable<ReturnType<typeof useAppData>['userData']>,
+  t: (k: string) => string,
+) {
   const { derived, income, financials, profile } = data;
   const actions: { title: string; body: string; tags: { label: string; color: string }[] }[] = [];
 
-  // 1. Tax reserve — always critical for gig workers
   const qTax = Math.round(income.avg_monthly_income * 3 * 0.25);
   const monthlyTaxSave = Math.round(income.avg_monthly_income * 0.25);
+
   actions.push({
-    title: `Save $${fmt(monthlyTaxSave)}/mo for your quarterly tax bill`,
-    body: `As a gig worker you owe ~$${fmt(qTax)} in self-employment tax every quarter. Open a separate "taxes" savings account and auto-transfer $${fmt(monthlyTaxSave)} every month starting now.`,
-    tags: [{ label: `$${fmt(qTax)} due quarterly`, color: 'red' }, { label: 'Critical', color: 'amber' }],
+    title: fill(t('act_tax_title'), { monthly: fmt(monthlyTaxSave) }),
+    body: fill(t('act_tax_body'), { qTax: fmt(qTax), monthly: fmt(monthlyTaxSave) }),
+    tags: [
+      { label: fill(t('act_tax_tag'), { qTax: fmt(qTax) }), color: 'red' },
+      { label: t('tag_critical'), color: 'amber' },
+    ],
   });
 
-  // 2. Health insurance if missing
   if (!financials.has_insurance) {
     actions.push({
-      title: 'Get health insurance — marketplace plans start at $0/mo',
-      body: `You have no health insurance. One ER visit costs $3,000–$8,000 out of pocket. At your income of $${fmt(income.avg_monthly_income)}/mo you likely qualify for a subsidized ACA plan at healthcare.gov.`,
-      tags: [{ label: '~$0–50/mo', color: 'blue' }, { label: '+20 score pts', color: 'blue' }],
+      title: t('act_ins_title'),
+      body: fill(t('act_ins_body'), { income: fmt(income.avg_monthly_income) }),
+      tags: [
+        { label: t('tag_ins_cost'), color: 'blue' },
+        { label: t('tag_score_pts_20'), color: 'blue' },
+      ],
     });
   }
 
-  // 3. Platform diversification for drivers
   if (profile.work_type === 'rideshare' || profile.work_type === 'delivery') {
     actions.push({
-      title: 'Add a backup income platform — 20 minutes to sign up',
-      body: `100% of your income comes from one platform. One deactivation = $0 overnight. Adding a backup platform takes 20 minutes and activates in 1–3 days. Protects your full income from a single point of failure.`,
-      tags: [{ label: 'Adds income buffer', color: 'green' }, { label: '+8 score pts', color: 'green' }],
+      title: t('act_platform_title'),
+      body: t('act_platform_body'),
+      tags: [
+        { label: t('tag_buffer'), color: 'green' },
+        { label: t('tag_score_pts_8'), color: 'green' },
+      ],
     });
   }
 
-  // 4. Emergency fund if runway < 45 days
   if (derived.cash_runway_days < 45) {
     const needed = financials.fixed_expenses * 3 - financials.savings;
     actions.push({
-      title: `Build emergency fund — need $${fmt(Math.max(needed, 0))} more for 3-month buffer`,
-      body: `You have ${derived.cash_runway_days} days of runway. Goal is 90 days ($${fmt(financials.fixed_expenses * 3)}). Even adding $200/mo consistently will get you there in ${Math.ceil(needed / 200)} months.`,
-      tags: [{ label: `${derived.cash_runway_days}d runway`, color: 'red' }, { label: 'High priority', color: 'amber' }],
+      title: fill(t('act_fund_title'), { needed: fmt(Math.max(needed, 0)) }),
+      body: fill(t('act_fund_body'), {
+        days: derived.cash_runway_days,
+        goal: fmt(financials.fixed_expenses * 3),
+        months: Math.ceil(needed / 200),
+      }),
+      tags: [
+        { label: fill(t('tag_runway'), { days: derived.cash_runway_days }), color: 'red' },
+        { label: t('tag_high_priority'), color: 'amber' },
+      ],
     });
   }
 
-  return actions.slice(0, 4); // max 4 actions
+  return actions.slice(0, 4);
 }
 
 // ─── TAG BADGE ────────────────────────────────────────────────────────────────
@@ -94,7 +100,6 @@ function ScoreRing({ score }: { score: number }) {
   const circ = 2 * Math.PI * r;
   const offset = circ - (score / 100) * circ;
   const color = score >= 65 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444';
-
   return (
     <div className="relative flex-shrink-0" style={{ width: 100, height: 100 }}>
       <svg width="100" height="100" viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)' }}>
@@ -129,25 +134,24 @@ function SubFactor({ label, value, color }: { label: string; value: number; colo
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export function Dashboard() {
   const { userData } = useAppData();
+  const { t } = useLanguage();
   const [checked, setChecked] = useState<number[]>([]);
 
-  if (!userData) return null; // layout redirects to onboarding if not onboarded
+  if (!userData) return null;
 
-  const { income, financials, derived, profile, monthly_spending } = userData;
+  const { income, financials, derived, monthly_spending = [] } = userData;
   const sub = deriveSubScores(userData);
-  const actions = buildActions(userData);
+  const actions = buildActions(userData, t);
 
-  // Survival stats
   const runwayWeeks = Math.round(derived.cash_runway_days / 7);
   const runwayMonths = (derived.cash_runway_days / 30).toFixed(1);
   const worstMonthSurplus = income.low_monthly_income - financials.fixed_expenses;
   const qTax = Math.round(income.avg_monthly_income * 3 * 0.25);
 
-  // Total monthly spend from spending breakdown
   const bd = financials.spending_breakdown;
   const totalMonthlySpend = Object.values(bd).reduce((a, b) => a + b, 0);
 
-  // Verdict
+  // ── Verdict ──
   const verdictConfig = {
     high:   { cls: 'bg-red-50 border border-red-200',    icon: '🚨', titleColor: 'text-red-800',   msgColor: 'text-red-700' },
     medium: { cls: 'bg-amber-50 border border-amber-200', icon: '⚠️', titleColor: 'text-amber-800', msgColor: 'text-amber-700' },
@@ -155,21 +159,46 @@ export function Dashboard() {
   }[derived.risk_level];
 
   const verdictTitle = {
-    high:   "You're heading toward a crisis — but you still have time",
-    medium: "You're managing, but one bad month could hurt",
-    low:    "You're in a solid position — keep building your buffer",
+    high:   t('verdict_high_title'),
+    medium: t('verdict_med_title'),
+    low:    t('verdict_low_title'),
   }[derived.risk_level];
 
   const verdictMsg = {
-    high:   `Your income swings ${Math.round(derived.income_volatility_score * 100)}% and you have only ${runwayWeeks} week${runwayWeeks !== 1 ? 's' : ''} of savings. ${!financials.has_insurance ? 'No insurance means one emergency could wipe everything. ' : ''}Start with the actions below.`,
-    medium: `Income volatility is ${Math.round(derived.income_volatility_score * 100)}% and your buffer covers ${runwayWeeks} weeks. Build toward 90 days of runway to absorb a slow stretch.`,
-    low:    `You have ${runwayWeeks} weeks of runway and manageable volatility. Keep saving and make sure your insurance coverage is complete.`,
+    high: fill(t('verdict_high_msg'), {
+      pct: Math.round(derived.income_volatility_score * 100),
+      weeks: runwayWeeks,
+      s: runwayWeeks !== 1 ? 's' : '',
+      insurance: !financials.has_insurance ? t('verdict_high_insurance') : '',
+    }),
+    medium: fill(t('verdict_med_msg'), {
+      pct: Math.round(derived.income_volatility_score * 100),
+      weeks: runwayWeeks,
+    }),
+    low: fill(t('verdict_low_msg'), { weeks: runwayWeeks }),
   }[derived.risk_level];
 
-  // Source label for AI findings
+  // ── Statement label ──
   const statementLabel = monthly_spending.length > 0
-    ? `Based on ${monthly_spending.length} months of statements · ${monthly_spending[monthly_spending.length - 1]?.month ?? ''} to ${monthly_spending[0]?.month ?? ''}`
-    : 'Based on your financial profile';
+    ? fill(t('based_on_months'), {
+        n: monthly_spending.length,
+        from: monthly_spending[monthly_spending.length - 1]?.month ?? '',
+        to: monthly_spending[0]?.month ?? '',
+      })
+    : t('based_on_profile');
+
+  // ── Score label ──
+  const scoreLabel = derived.financial_health_score >= 65
+    ? t('score_stable')
+    : derived.financial_health_score >= 40
+    ? t('score_needs_work')
+    : t('score_critical');
+
+  const scoreDesc = derived.financial_health_score >= 65
+    ? t('score_desc_stable')
+    : derived.financial_health_score >= 40
+    ? t('score_desc_medium')
+    : t('score_desc_critical');
 
   return (
     <div className="p-7 space-y-5 max-w-6xl">
@@ -179,23 +208,26 @@ export function Dashboard() {
         <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/5 -translate-y-8 translate-x-8" />
         <div className="absolute bottom-0 right-24 w-20 h-20 rounded-full bg-white/3 translate-y-6" />
         <div className="flex items-center gap-2 mb-1 text-white/60 text-xs font-bold uppercase tracking-wider relative">
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          AI Analysis · from your bank statements
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          {t('ai_badge')}
         </div>
-        <h2 className="text-xl font-bold mb-1 relative">Here's what we found in your statements</h2>
+        <h2 className="text-xl font-bold mb-1 relative">{t('ai_title')}</h2>
         <p className="text-sm text-white/60 mb-5 relative">{statementLabel}</p>
         <div className="grid grid-cols-5 gap-3 relative">
           {[
-            { label: 'Avg monthly income', val: `$${fmt(income.avg_monthly_income)}`,                                                        sub: '12-month average' },
-            { label: 'Avg monthly spend',  val: `$${fmt(totalMonthlySpend > 0 ? totalMonthlySpend : financials.fixed_expenses)}`,             sub: 'All categories' },
-            { label: 'Savings balance',    val: `$${fmt(financials.savings)}`,                                                                sub: 'From savings statement' },
-            { label: 'Debt payments',      val: `$${fmt(financials.debt_payments)}/mo`,                                                       sub: 'Credit & loans', warn: financials.debt_payments > income.avg_monthly_income * 0.2 },
-            { label: 'Insurance',          val: financials.has_insurance ? '✓ Covered' : '✗ None',                                           sub: financials.has_insurance ? 'Detected in statements' : 'Not found — high risk', warn: !financials.has_insurance },
+            { labelKey: 'stat_avg_income', subKey: 'stat_sub_avg_income', val: `$${fmt(income.avg_monthly_income)}` },
+            { labelKey: 'stat_avg_spend',  subKey: 'stat_sub_avg_spend',  val: `$${fmt(totalMonthlySpend > 0 ? totalMonthlySpend : financials.fixed_expenses)}` },
+            { labelKey: 'stat_savings',    subKey: 'stat_sub_savings',    val: `$${fmt(financials.savings)}` },
+            { labelKey: 'stat_debt',       subKey: 'stat_sub_debt',       val: `$${fmt(financials.debt_payments)}/mo`, warn: financials.debt_payments > income.avg_monthly_income * 0.2 },
+            { labelKey: 'stat_insurance',  subKey: financials.has_insurance ? 'stat_detected' : 'stat_not_found',
+              val: financials.has_insurance ? t('stat_covered') : t('stat_none'), warn: !financials.has_insurance },
           ].map(s => (
-            <div key={s.label} className="bg-white/10 rounded-xl p-3">
-              <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wide mb-1">{s.label}</div>
+            <div key={s.labelKey} className="bg-white/10 rounded-xl p-3">
+              <div className="text-[10px] text-white/60 font-semibold uppercase tracking-wide mb-1">{t(s.labelKey)}</div>
               <div className="text-lg font-black" style={{ color: s.warn ? '#fca5a5' : '#fff' }}>{s.val}</div>
-              <div className="text-[10px] text-white/50 mt-0.5">{s.sub}</div>
+              <div className="text-[10px] text-white/50 mt-0.5">{t(s.subKey)}</div>
             </div>
           ))}
         </div>
@@ -206,70 +238,70 @@ export function Dashboard() {
         <ScoreRing score={derived.financial_health_score} />
         <div className="flex-1 min-w-0">
           <h3 className="text-base font-bold text-slate-900 mb-1">
-            Financial survival score: {derived.financial_health_score} —{' '}
-            {derived.financial_health_score >= 65 ? 'Stable' : derived.financial_health_score >= 40 ? 'Needs work' : 'Critical'}
+            {t('score_prefix')}: {derived.financial_health_score} — {scoreLabel}
           </h3>
-          <p className="text-sm text-slate-500 mb-3 leading-relaxed">
-            {derived.financial_health_score >= 65
-              ? 'You have a solid base. Keep building your runway and close any coverage gaps.'
-              : derived.financial_health_score >= 40
-              ? 'You\'re one slow month away from real trouble. Three specific fixes will raise this score significantly.'
-              : 'Your situation is critical. Immediate action on the items below is essential.'}
-          </p>
+          <p className="text-sm text-slate-500 mb-3 leading-relaxed">{scoreDesc}</p>
           <div className="grid grid-cols-2 gap-2">
-            <SubFactor label="Income stability"
-              value={sub.incomeStability}
+            <SubFactor label={t('sf_income')} value={sub.incomeStability}
               color={sub.incomeStability >= 60 ? '#22c55e' : sub.incomeStability >= 35 ? '#f59e0b' : '#ef4444'} />
-            <SubFactor label="Tax reserve"
-              value={sub.taxReserveScore}
+            <SubFactor label={t('sf_tax')} value={sub.taxReserveScore}
               color={sub.taxReserveScore >= 50 ? '#22c55e' : '#ef4444'} />
-            <SubFactor label="Savings buffer"
-              value={sub.savingsBuffer}
+            <SubFactor label={t('sf_savings')} value={sub.savingsBuffer}
               color={sub.savingsBuffer >= 60 ? '#22c55e' : sub.savingsBuffer >= 30 ? '#f59e0b' : '#ef4444'} />
-            <SubFactor label="Coverage gaps"
-              value={sub.coverageScore}
+            <SubFactor label={t('sf_coverage')} value={sub.coverageScore}
               color={sub.coverageScore >= 60 ? '#22c55e' : sub.coverageScore >= 40 ? '#f59e0b' : '#ef4444'} />
           </div>
         </div>
       </div>
 
-      {/* ── Plain-English Survival Stats ── */}
+      {/* ── Survival Stats ── */}
       <div className="grid grid-cols-3 gap-4">
         {/* Runway */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">If you stopped working today</div>
-          <div className="text-3xl font-black mb-1" style={{ color: derived.cash_runway_days < 30 ? '#ef4444' : derived.cash_runway_days < 60 ? '#f59e0b' : '#22c55e', letterSpacing: '-1px' }}>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+            {t('runway_header')}
+          </div>
+          <div className="text-3xl font-black mb-1" style={{
+            color: derived.cash_runway_days < 30 ? '#ef4444' : derived.cash_runway_days < 60 ? '#f59e0b' : '#22c55e',
+            letterSpacing: '-1px',
+          }}>
             {runwayWeeks < 1 ? `${derived.cash_runway_days}d` : runwayWeeks < 8 ? `${runwayWeeks} weeks` : `${runwayMonths} months`}
           </div>
           <div className="text-xs text-slate-500 leading-relaxed">
-            Your <strong className="text-slate-700">${fmt(financials.savings)} in savings</strong> would last {runwayWeeks} week{runwayWeeks !== 1 ? 's' : ''} at your spending level. Goal is 6 months.
+            {fill(t('runway_body'), {
+              savings: `$${fmt(financials.savings)}`,
+              weeks: runwayWeeks,
+              s: runwayWeeks !== 1 ? 's' : '',
+            })}
           </div>
         </div>
 
         {/* Worst month */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">On your worst month</div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+            {t('worst_header')}
+          </div>
           <div className="text-3xl font-black mb-1" style={{ color: worstMonthSurplus < 0 ? '#ef4444' : '#f59e0b', letterSpacing: '-1px' }}>
-            {worstMonthSurplus < 0
-              ? `-$${fmt(Math.abs(worstMonthSurplus))}`
-              : `+$${fmt(worstMonthSurplus)}`}
+            {worstMonthSurplus < 0 ? `-$${fmt(Math.abs(worstMonthSurplus))}` : `+$${fmt(worstMonthSurplus)}`}
           </div>
           <div className="text-xs text-slate-500 leading-relaxed">
-            Your lowest month was <strong className="text-slate-700">${fmt(income.low_monthly_income)}</strong>.{' '}
+            {fill(t('worst_lowest'), { income: `$${fmt(income.low_monthly_income)}` })}{' '}
             {worstMonthSurplus < 0
-              ? `After expenses you run a $${fmt(Math.abs(worstMonthSurplus))} deficit — savings drain fast.`
-              : `After expenses you have $${fmt(worstMonthSurplus)} left — a thin cushion.`}
+              ? fill(t('worst_deficit'), { amount: `$${fmt(Math.abs(worstMonthSurplus))}` })
+              : fill(t('worst_surplus'), { amount: `$${fmt(worstMonthSurplus)}` })}
           </div>
         </div>
 
-        {/* Tax bill */}
+        {/* Tax */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Quarterly tax estimate</div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+            {t('tax_header')}
+          </div>
           <div className="text-3xl font-black text-red-500 mb-1" style={{ letterSpacing: '-1px' }}>
             ${fmt(qTax)}
           </div>
           <div className="text-xs text-slate-500 leading-relaxed">
-            Self-employment tax is ~25% of quarterly income. At your average of <strong className="text-slate-700">${fmt(income.avg_monthly_income)}/mo</strong>, you owe ~${fmt(qTax)} every quarter.
+            {fill(t('tax_body'), { income: `$${fmt(income.avg_monthly_income)}`, tax: `$${fmt(qTax)}` })}
           </div>
         </div>
       </div>
@@ -287,8 +319,10 @@ export function Dashboard() {
             className="flex-shrink-0 flex items-center gap-1.5 text-sm font-bold text-white px-4 py-2 rounded-xl transition-colors"
             style={{ background: '#2d3dbd' }}
           >
-            Crisis Advisor
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            {t('crisis_advisor_btn')}
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
           </Link>
         )}
       </div>
@@ -296,9 +330,9 @@ export function Dashboard() {
       {/* ── Do This Now ── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <span className="text-base font-black text-slate-900">Do this now</span>
+          <span className="text-base font-black text-slate-900">{t('do_this_now')}</span>
           <span className="text-xs font-bold bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded-full">
-            {actions.length} critical
+            {fill(t('n_critical'), { n: actions.length })}
           </span>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -309,13 +343,10 @@ export function Dashboard() {
                 key={i}
                 className={`flex items-start gap-4 px-5 py-4 border-b border-slate-100 last:border-b-0 transition-colors ${done ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
               >
-                {/* Number */}
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5 text-white"
                   style={{ background: done ? '#22c55e' : '#2d3dbd' }}>
                   {done ? '✓' : i + 1}
                 </div>
-
-                {/* Body */}
                 <div className="flex-1 min-w-0">
                   <h4 className={`text-sm font-bold mb-1 ${done ? 'line-through text-slate-400' : 'text-slate-900'}`}>
                     {action.title}
@@ -329,8 +360,6 @@ export function Dashboard() {
                     ))}
                   </div>
                 </div>
-
-                {/* Checkbox */}
                 <button
                   onClick={() => setChecked(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
                   className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all ${

@@ -107,13 +107,17 @@ export interface CrisisAIResponse {
   extendedRunwayMonths: number;
 }
 
-interface UserContext {
+export interface UserContext {
   savings: number;
   monthlyExpenses: number;
   avgMonthlyIncome: number;
+  lowMonthlyIncome?: number;
   runwayDays: number;
   hasInsurance: boolean;
   workType: string;
+  healthScore?: number;
+  riskLevel?: string;
+  incomeVolatility?: number;
 }
 
 async function callTextModel(prompt: string): Promise<string> {
@@ -243,7 +247,7 @@ Rules:
 export async function streamCrisisChat(
   question: string,
   crisisTitle: string,
-  userCtx: { savings: number; monthlyExpenses: number; hasInsurance: boolean } | null,
+  userCtx: { savings: number; monthlyExpenses: number; hasInsurance: boolean; avgMonthlyIncome?: number; lowMonthlyIncome?: number; runwayDays?: number; healthScore?: number; riskLevel?: string; incomeVolatility?: number; workType?: string } | null,
   history: { role: string; content: string }[],
   onToken: (t: string) => void,
   onDone: () => void,
@@ -251,9 +255,27 @@ export async function streamCrisisChat(
 ) {
   if (!GEMINI_KEY && !GROQ_KEY) { onError('No AI API key set. Add VITE_GEMINI_API_KEY or VITE_GROQ_API_KEY to your .env file.'); return; }
 
-  const systemPrompt = `You are a financial crisis advisor helping someone through: "${crisisTitle}".
-${userCtx ? `Their finances: $${userCtx.savings.toLocaleString()} savings, $${userCtx.monthlyExpenses.toLocaleString()}/mo expenses, insurance: ${userCtx.hasInsurance ? 'yes' : 'no'}.` : ''}
-Give specific, actionable, empathetic advice. Keep responses concise (2–3 short paragraphs). Use plain language, no jargon.`;
+  const dataBlock = userCtx ? `
+User's current financial data:
+- Work type: ${userCtx.workType ?? 'gig worker'}
+- Avg monthly income: $${userCtx.avgMonthlyIncome?.toLocaleString() ?? '?'}
+- Lowest monthly income: $${userCtx.lowMonthlyIncome?.toLocaleString() ?? '?'}
+- Monthly expenses: $${userCtx.monthlyExpenses.toLocaleString()}
+- Savings: $${userCtx.savings.toLocaleString()} (${userCtx.runwayDays ?? '?'} days runway)
+- Health score: ${userCtx.healthScore ?? '?'}/100 — ${userCtx.riskLevel ?? '?'} risk
+- Income volatility: ${userCtx.incomeVolatility != null ? Math.round(userCtx.incomeVolatility * 100) + '%' : '?'}
+- Insurance: ${userCtx.hasInsurance ? 'yes' : 'no'}` : 'No financial data available.';
+
+  const systemPrompt = `You are Crunch Guide, a financial crisis prevention assistant for gig workers.
+${crisisTitle !== 'General Financial Coaching' ? `Context: the user is dealing with "${crisisTitle}".` : ''}
+${dataBlock}
+
+Only answer using the user's data above. Never guess or hallucinate. If data is missing say: "I can't verify that from your current data."
+
+Help with: runway, spending pressure, volatility, bills, what to do today, whether things are improving, dashboard numbers.
+Do NOT help with: insurance product recommendations, investment advice, legal advice, tax filing advice, medical advice, or anything unrelated to the user's financial situation. If asked, reply: "That's outside what I can help with. Ask me about your runway, spending, or what to do today."
+
+Style: plain English, direct, 1–4 sentences max, one practical action when relevant. Be brief — never exceed 4 sentences.`;
 
   const contents = [
     ...history.map(m => ({
@@ -272,7 +294,7 @@ Give specific, actionable, empathetic advice. Keep responses concise (2–3 shor
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents,
-          generationConfig: { maxOutputTokens: 1024 },
+          generationConfig: { maxOutputTokens: 200 },
         }),
       }
     );
@@ -285,10 +307,10 @@ Give specific, actionable, empathetic advice. Keep responses concise (2–3 shor
       text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     }
 
-    // Groq fallback if Gemini gave nothing
+    // Groq fallback
     if (!text) {
       const fullPrompt = `${systemPrompt}\n\nUser: ${question}`;
-      text = await callGroqText(fullPrompt, 1024);
+      text = await callGroqText(fullPrompt, 200);
     }
     if (!text) { onError('No response received.'); return; }
 

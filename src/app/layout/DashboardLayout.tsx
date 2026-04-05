@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useAppData } from '../store/AppContext';
+import { useLanguage, LANGUAGES } from '../store/LanguageContext';
+import { speak, SpeechController } from '../lib/elevenlabs';
 import { streamCrisisChat } from '../../lib/gemini';
 
 // ─── NAV ITEMS ────────────────────────────────────────────────────────────────
@@ -27,7 +29,6 @@ const NAV_MAIN = [
   {
     path: '/crisis',
     label: 'Crisis Advisor',
-    dot: true,
     icon: (
       <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-4 h-4">
         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -71,19 +72,72 @@ const NAV_ACCOUNT = [
   },
 ];
 
+// ─── SPEAK BUTTON ─────────────────────────────────────────────────────────────
+function SpeakButton({ text }: { text: string }) {
+  const { lang } = useLanguage();
+  const [state, setState] = useState<'idle' | 'loading' | 'playing'>('idle');
+  const ctrlRef = useRef<SpeechController | null>(null);
+
+  const stop = () => {
+    ctrlRef.current?.stop();
+    ctrlRef.current = null;
+    setState('idle');
+  };
+
+  const handleClick = async () => {
+    if (state !== 'idle') { stop(); return; }
+    setState('loading');
+    try {
+      const ctrl = await speak(
+        text,
+        lang,
+        () => setState('playing'),
+        () => { ctrlRef.current = null; setState('idle'); },
+      );
+      ctrlRef.current = ctrl;
+    } catch {
+      setState('idle');
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      title={state === 'playing' ? 'Stop' : 'Listen'}
+      className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center border transition-all hover:scale-110 ${
+        state === 'playing'
+          ? 'bg-red-50 border-red-200 text-red-500'
+          : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-blue-500 hover:border-blue-300'
+      }`}
+    >
+      {state === 'loading' ? (
+        <div className="w-3 h-3 rounded-full border-2 border-slate-300 border-t-blue-500 animate-spin" />
+      ) : state === 'playing' ? (
+        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      ) : (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+      )}
+    </button>
+  );
+}
+
 // ─── AI COACH OVERLAY ─────────────────────────────────────────────────────────
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
 
 const INIT_MSG: ChatMsg = {
   role: 'assistant',
-  content: "Hi! I'm your AI financial coach.\n\nI'm here to help you build a stronger financial future — no judgment, just real advice tailored to your situation.\n\nWhat's on your mind today?",
+  content: "Hi, I'm Crunch Guide.\n\nAsk me about your runway, spending pressure, upcoming bills, or what to do today. I'll answer using your actual data — nothing generic.",
 };
 
 const QUICK_PROMPTS = [
   'How do I start saving for taxes?',
   'What is coinsurance?',
   'How do I appeal an insurance denial?',
-  'What programs can I get with ITIN?',
+  'Know the terms: Runway, Preparation Score, Income Volatility and financial survival score.',
   'How do I build an emergency fund?',
 ];
 
@@ -92,6 +146,7 @@ function AICoachOverlay({ open, onClose, userData }: {
   onClose: () => void;
   userData: ReturnType<typeof useAppData>['userData'];
 }) {
+  const { t, geminiLangName } = useLanguage();
   const [msgs, setMsgs] = useState<ChatMsg[]>([INIT_MSG]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -120,12 +175,19 @@ function AICoachOverlay({ open, onClose, userData }: {
       savings: userData.financials.savings,
       monthlyExpenses: userData.financials.fixed_expenses,
       hasInsurance: userData.financials.has_insurance,
+      avgMonthlyIncome: userData.income.avg_monthly_income,
+      lowMonthlyIncome: userData.income.low_monthly_income,
+      runwayDays: userData.derived.cash_runway_days,
+      healthScore: userData.derived.financial_health_score,
+      riskLevel: userData.derived.risk_level,
+      incomeVolatility: userData.derived.income_volatility_score,
+      workType: userData.profile.work_type,
     } : null;
 
     let streamed = '';
     await streamCrisisChat(
       txt,
-      'General Financial Coaching',
+      `General Financial Coaching — respond in ${geminiLangName}`,
       userCtx,
       historyRef.current.slice(0, -1),
       (token) => {
@@ -149,17 +211,14 @@ function AICoachOverlay({ open, onClose, userData }: {
         setStreaming(false);
       }
     );
-  }, [input, streaming, userData]);
+  }, [input, streaming, userData, geminiLangName]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       {/* Modal */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] max-w-2xl h-[82vh] bg-white rounded-2xl flex flex-col overflow-hidden shadow-2xl">
         {/* Header */}
@@ -167,10 +226,10 @@ function AICoachOverlay({ open, onClose, userData }: {
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg">💬</div>
             <div>
-              <div className="text-sm font-bold text-white">AI Financial Coach</div>
+              <div className="text-sm font-bold text-white">{t('AI Financial Coach')}</div>
               <div className="flex items-center gap-1.5 text-xs text-white/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-                Live · Ready to help
+                {t('Live · Ready to help')}
               </div>
             </div>
           </div>
@@ -184,7 +243,7 @@ function AICoachOverlay({ open, onClose, userData }: {
 
         {/* Quick prompts */}
         <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 flex gap-2 overflow-x-auto scrollbar-hide flex-shrink-0">
-          <span className="text-xs text-slate-400 whitespace-nowrap self-center">Ask:</span>
+          <span className="text-xs text-slate-400 whitespace-nowrap self-center">{t('Ask:')}</span>
           {QUICK_PROMPTS.map(p => (
             <button
               key={p}
@@ -202,8 +261,9 @@ function AICoachOverlay({ open, onClose, userData }: {
           {msgs.map((m, i) => {
             const isUser = m.role === 'user';
             const isStreaming = streaming && i === msgs.length - 1 && !isUser;
+            const isDone = !isUser && !isStreaming && m.content.length > 0;
             return (
-              <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+              <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'} items-end gap-1.5`}>
                 <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                   isUser
                     ? 'text-white rounded-br-sm'
@@ -216,6 +276,10 @@ function AICoachOverlay({ open, onClose, userData }: {
                     <span className="inline-block w-0.5 h-3.5 bg-slate-400 ml-0.5 align-text-bottom animate-pulse" />
                   )}
                 </div>
+                {/* ElevenLabs speak button on completed assistant messages */}
+                {isDone && (
+                  <SpeakButton text={m.content} />
+                )}
               </div>
             );
           })}
@@ -229,7 +293,7 @@ function AICoachOverlay({ open, onClose, userData }: {
             value={input}
             onChange={e => { setInput(e.target.value); e.target.style.height = '44px'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={streaming ? 'AI is responding…' : 'Ask your coach…'}
+            placeholder={streaming ? t('AI is responding…') : t('Ask your coach…')}
             disabled={streaming}
             rows={1}
             className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 overflow-hidden"
@@ -253,7 +317,7 @@ function AICoachOverlay({ open, onClose, userData }: {
 }
 
 // ─── SIDEBAR NAV LINK ─────────────────────────────────────────────────────────
-function NavLink({ item, active }: { item: typeof NAV_MAIN[0] & { dot?: boolean }; active: boolean }) {
+function NavLink({ item, active, label }: { item: typeof NAV_MAIN[0]; active: boolean; label: string }) {
   return (
     <Link
       to={item.path}
@@ -264,11 +328,58 @@ function NavLink({ item, active }: { item: typeof NAV_MAIN[0] & { dot?: boolean 
       }`}
     >
       {item.icon}
-      <span>{item.label}</span>
-      {'dot' in item && item.dot && !active && (
-        <span className="absolute right-2 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-      )}
+      <span>{label}</span>
     </Link>
+  );
+}
+
+// ─── LANGUAGE SELECTOR (sidebar) ─────────────────────────────────────────────
+function LanguageSelector() {
+  const { lang, setLang, t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const current = LANGUAGES.find(l => l.code === lang)!;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-white/70 hover:text-white/90 hover:bg-white/10 transition-colors border border-white/15"
+        title={t('Language')}
+      >
+        {/* Globe icon */}
+        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <span>{current.flag} {current.label}</span>
+        <svg className="w-3 h-3 ml-auto opacity-50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full mb-1 left-0 right-0 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
+          {LANGUAGES.map(l => (
+            <button
+              key={l.code}
+              onClick={() => { setLang(l.code); setOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors border-b border-slate-100 last:border-0 ${
+                l.code === lang ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span>{l.flag}</span>
+              <span>{l.name}</span>
+              {l.code === lang && (
+                <svg className="w-3.5 h-3.5 ml-auto text-blue-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -277,6 +388,7 @@ export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { isOnboarded, resetData, userData } = useAppData();
+  const { t } = useLanguage();
   const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
@@ -290,13 +402,6 @@ export function DashboardLayout() {
       ? (userData as any).profile.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
       : 'GW'
     : 'GW';
-
-  const workLabel: Record<string, string> = {
-    rideshare: 'Rideshare Driver',
-    delivery: 'Delivery Worker',
-    freelance: 'Freelancer',
-    contract: 'Contractor',
-  };
 
   return (
     <div className="flex min-h-screen" style={{ background: '#f4f6fb' }}>
@@ -313,23 +418,23 @@ export function DashboardLayout() {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-3 pb-1 pt-2">Main</div>
+          <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-3 pb-1 pt-2">{t('Main')}</div>
           {NAV_MAIN.map(item => (
-            <NavLink key={item.path} item={item} active={location.pathname === item.path} />
+            <NavLink key={item.path} item={item} active={location.pathname === item.path} label={t(item.label)} />
           ))}
 
-          <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-3 pb-1 pt-4">Tools</div>
+          <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-3 pb-1 pt-4">{t('Tools')}</div>
           {NAV_TOOLS.map(item => (
-            <NavLink key={item.path} item={item} active={location.pathname === item.path} />
+            <NavLink key={item.path} item={item} active={location.pathname === item.path} label={t(item.label)} />
           ))}
 
-          <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-3 pb-1 pt-4">Account</div>
+          <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-3 pb-1 pt-4">{t('Account')}</div>
           {NAV_ACCOUNT.map(item => (
-            <NavLink key={item.path} item={item} active={location.pathname === item.path} />
+            <NavLink key={item.path} item={item} active={location.pathname === item.path} label={t(item.label)} />
           ))}
         </nav>
 
-        {/* User + Reset */}
+        {/* User + Language + Reset */}
         <div className="px-3 pb-4 border-t border-white/10 pt-3 space-y-2">
           <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/10 cursor-pointer transition-colors">
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
@@ -337,13 +442,17 @@ export function DashboardLayout() {
             </div>
             <div className="min-w-0">
               <div className="text-xs font-semibold text-white truncate">
-                {(userData as any)?.profile?.name ?? 'Gig Worker'}
+                {(userData as any)?.profile?.name ?? t('Gig Worker')}
               </div>
               <div className="text-[10px] text-white/50 truncate">
-                {userData ? workLabel[userData.profile.work_type] : ''}
+                {userData ? t(userData.profile.work_type) : ''}
               </div>
             </div>
           </div>
+
+          {/* Page translation selector */}
+          <LanguageSelector />
+
           <button
             onClick={() => { resetData(); navigate('/onboarding', { replace: true }); }}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors border border-white/15"
@@ -351,7 +460,7 @@ export function DashboardLayout() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
-            Reset Profile
+            {t('Reset Profile')}
           </button>
         </div>
       </aside>
@@ -366,7 +475,7 @@ export function DashboardLayout() {
         onClick={() => setChatOpen(true)}
         className="fixed bottom-6 right-6 w-13 h-13 rounded-full shadow-lg flex items-center justify-center text-xl transition-transform hover:scale-110 z-40"
         style={{ background: 'linear-gradient(135deg,#2d3dbd,#1a237e)', width: 52, height: 52 }}
-        title="Ask your AI coach"
+        title={t('Ask your AI coach')}
       >
         💬
       </button>
