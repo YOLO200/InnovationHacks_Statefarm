@@ -438,7 +438,7 @@ export function Prepare() {
             <Link to="/crisis"
               className="w-full block text-center text-sm font-bold px-4 py-2.5 rounded-xl text-white transition-opacity hover:opacity-90"
               style={{ background: '#2d3dbd' }}>
-              Simulate a crisis →
+              Are you in a crisis? →
             </Link>
           </div>
         </div>
