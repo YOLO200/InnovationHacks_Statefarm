@@ -21,10 +21,12 @@ const QUICK_CRISES = [
 ];
 
 const QUICK_QUESTIONS = [
-  'How do I apply for financial aid?',
-  'What documents do I need?',
-  'Can I negotiate my bills?',
-  'What if I can\'t pay rent this month?',
+  "What should I do first?",
+  "How do I improve my health score?",
+  "Can I negotiate my bills?",
+  "What if I can't pay rent this month?",
+  "How do I apply for financial aid?",
+  "How long can my savings last?",
 ];
 
 type View = 'input' | 'loading' | 'result';
@@ -85,15 +87,18 @@ export function CrisisAdvisor() {
     setChatMsgs(prev => [...prev, { role: 'user', content: q }, { role: 'assistant', content: '' }]);
     setChatStreaming(true);
 
-    const chatUserCtx = userCtx
-      ? { savings: userCtx.savings, monthlyExpenses: userCtx.monthlyExpenses, hasInsurance: userCtx.hasInsurance }
-      : null;
+    const planSummary = aiData ? [
+      aiData.immediateActions?.length ? `Immediate actions: ${aiData.immediateActions.map(a => a.text).join('; ')}` : '',
+      aiData.smartRecommendations?.length ? `Recommendations: ${aiData.smartRecommendations.map(r => r.title).join('; ')}` : '',
+      aiData.runoutMonths ? `Estimated runway: ${aiData.runoutMonths} months` : '',
+      aiData.extendedRunwayMonths ? `Extended runway if cuts made: ${aiData.extendedRunwayMonths} months` : '',
+    ].filter(Boolean).join('\n') : undefined;
 
     let streamed = '';
     await streamCrisisChat(
       q,
       aiData?.crisisTitle ?? text,
-      chatUserCtx,
+      userCtx,
       chatHistoryRef.current.slice(0, -1),
       (token) => {
         streamed += token;
@@ -115,7 +120,8 @@ export function CrisisAdvisor() {
           return copy;
         });
         setChatStreaming(false);
-      }
+      },
+      planSummary,
     );
   }, [chatInput, chatStreaming, aiData, text, userCtx]);
 

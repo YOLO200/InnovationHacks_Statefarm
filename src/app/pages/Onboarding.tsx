@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useNavigate } from 'react-router';
 import { Slider } from '../components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
@@ -200,7 +201,6 @@ function SliderField({ label, value, min, max, step, color, onChange }: {
 
 // ─── STEP 3: BANK STATEMENT UPLOAD ───────────────────────────────────────────
 import { callGemini, QuotaExceededError } from '../lib/gemini';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 type StatementType = 'checking' | 'savings' | 'credit';
 
@@ -319,6 +319,7 @@ interface Step3Props {
   onSpendingExtracted: (s: FinancialSnapshot['spending_breakdown']) => void;
   onMonthlySpendingExtracted: (ms: { month: string; breakdown: FinancialSnapshot['spending_breakdown'] }[]) => void;
 }
+
 
 const LOADING_MESSAGES = [
   'Reading your statements…',
