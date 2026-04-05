@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card } from '../components/ui/card';
 import { Slider } from '../components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Label } from '../components/ui/label';
@@ -180,8 +179,6 @@ function Step1({ data, onChange }: Step1Props) {
   );
 }
 
-// ─── STEP 2 ───────────────────────────────────────────────────────────────────
-interface Step2Props { data: IncomeData; onChange: (d: IncomeData) => void; }
 
 function SliderField({ label, value, min, max, step, color, onChange }: {
   label: string; value: number; min: number; max: number; step: number;
@@ -209,55 +206,24 @@ function SliderField({ label, value, min, max, step, color, onChange }: {
   );
 }
 
-function Step2({ data, onChange }: Step2Props) {
-  const volatility = data.avg_monthly_income > 0
-    ? ((data.high_monthly_income - data.low_monthly_income) / data.avg_monthly_income * 100).toFixed(0)
-    : '0';
-
-  return (
-    <div className="space-y-8">
-      <SliderField
-        label="Average Monthly Income"
-        value={data.avg_monthly_income}
-        min={500} max={10000} step={100}
-        color="text-blue-600"
-        onChange={v => onChange({ ...data, avg_monthly_income: v })}
-      />
-      <SliderField
-        label="Lowest Month Income"
-        value={data.low_monthly_income}
-        min={0} max={data.avg_monthly_income} step={100}
-        color="text-red-500"
-        onChange={v => onChange({ ...data, low_monthly_income: v })}
-      />
-      <SliderField
-        label="Highest Month Income"
-        value={data.high_monthly_income}
-        min={data.avg_monthly_income} max={15000} step={100}
-        color="text-green-600"
-        onChange={v => onChange({ ...data, high_monthly_income: v })}
-      />
-
-      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-        <p className="text-sm text-amber-800">
-          <span className="font-semibold">Income volatility: {volatility}%</span>
-          {Number(volatility) > 50
-            ? ' — This is very high. Your plan will be built around your lowest months.'
-            : Number(volatility) > 30
-            ? " — Moderate variability. We'll plan for your worst-case scenarios."
-            : ' — Relatively stable. Good foundation to build on.'}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 // ─── STEP 3: BANK STATEMENT UPLOAD ───────────────────────────────────────────
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+import { callGemini, QuotaExceededError } from '../lib/gemini';
 
 type StatementType = 'checking' | 'savings' | 'credit';
 
 interface UploadedFile { type: StatementType; file: File; base64: string; }
+
+interface SpendingBreakdownShape {
+  housing: number;
+  food: number;
+  gas: number;
+  maintenance: number;
+  phone: number;
+  insurance: number;
+  debt: number;
+  other: number;
+}
 
 interface ExtractedData {
   avg_monthly_income: number;
@@ -267,16 +233,8 @@ interface ExtractedData {
   fixed_expenses: number;
   debt_payments: number;
   has_insurance: boolean;
-  spending_breakdown: {
-    housing: number;
-    food: number;
-    gas: number;
-    maintenance: number;
-    phone: number;
-    insurance: number;
-    debt: number;
-    other: number;
-  };
+  spending_breakdown: SpendingBreakdownShape;
+  monthly_spending: { month: string; breakdown: SpendingBreakdownShape }[];
 }
 
 const STATEMENT_SLOTS: { type: StatementType; label: string; desc: string; color: string; bg: string; border: string }[] = [
@@ -298,8 +256,6 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 async function extractFromStatements(files: UploadedFile[]): Promise<ExtractedData> {
-  if (!GEMINI_API_KEY) throw new Error('No API key. Add VITE_GEMINI_API_KEY to your .env file.');
-
   const parts: object[] = files.map(f => ({
     inlineData: { mimeType: f.file.type || 'application/pdf', data: f.base64 },
   }));
@@ -319,44 +275,46 @@ Analyze ALL documents together and extract the following. Return ONLY valid JSON
   "debt_payments": <total monthly credit card or debt payments as a number>,
   "has_insurance": <true if any insurance payment is visible, otherwise false>,
   "spending_breakdown": {
-    "housing": <rent or mortgage payments from the most recent month as a number>,
-    "food": <grocery and restaurant spending from the most recent month as a number>,
-    "gas": <gas station and fuel spending from the most recent month as a number>,
-    "maintenance": <car maintenance, repairs, or auto services from the most recent month as a number>,
-    "phone": <phone bill or mobile plan from the most recent month as a number>,
-    "insurance": <insurance premiums from the most recent month as a number>,
-    "debt": <credit card and loan payments from the most recent month as a number>,
-    "other": <all remaining spending from the most recent month not covered above as a number>
-  }
+    "housing": <rent or mortgage from most recent month>,
+    "food": <groceries and restaurants from most recent month>,
+    "gas": <fuel from most recent month>,
+    "maintenance": <car/home repairs from most recent month>,
+    "phone": <phone bill from most recent month>,
+    "insurance": <insurance premiums from most recent month>,
+    "debt": <loan/credit payments from most recent month>,
+    "other": <everything else from most recent month>
+  },
+  "monthly_spending": [
+    {
+      "month": <"Month YYYY" e.g. "June 2024">,
+      "breakdown": {
+        "housing": <number>,
+        "food": <number>,
+        "gas": <number>,
+        "maintenance": <number>,
+        "phone": <number>,
+        "insurance": <number>,
+        "debt": <number>,
+        "other": <number>
+      }
+    }
+  ]
 }
 
 Rules:
-- Income figures: scan all months in the checking account to find avg/low/high deposit totals
-- fixed_expenses: average monthly outflows across all months (exclude transfers to savings)
-- savings: use the ending balance on the savings statement
-- spending_breakdown: use ONLY the most recent calendar month from the checking and credit card statements
-- Categorize transactions by merchant name/description — e.g. "Shell", "BP" → gas; "Kroger", "Whole Foods" → food; "AT&T", "Verizon" → phone; "State Farm", "Allstate" → insurance
-- If a category has no transactions, use 0
-- spending_breakdown values should add up to approximately the most recent month's total expenses
+- Income figures: scan all months in the checking account deposits/credits to find avg/low/high — ignore transfers between own accounts
+- fixed_expenses: average monthly outflows across all months from the checking account — exclude transfers to savings, transfers between own accounts, and one-time payments over $2,000
+- savings: look ONLY at the savings account statement — find the line explicitly labeled "Ending Balance", "Closing Balance", "Available Balance", or "Account Balance" at the end of the most recent statement period — do NOT use the checking account balance under any circumstances
+- debt_payments: from the credit card statement, use the actual "Payment Made" or "Minimum Payment Due" amount from the most recent month — do NOT use the total outstanding balance
+- spending_breakdown: use ONLY the most recent calendar month's transactions
+- monthly_spending: produce one entry per calendar month found across ALL statements — sorted newest month first — each with the same 8 category breakdown
+- Categorize by merchant name: "Shell", "BP", "Chevron" → gas; "Kroger", "Whole Foods", "McDonald's" → food; "AT&T", "Verizon", "T-Mobile" → phone; "State Farm", "Allstate", "Geico" → insurance; "Rent", "Mortgage", "Apartment" → housing; "Jiffy Lube", "AutoZone", "Midas" → maintenance
+- Do not double-count transactions across categories
+- If a category has no transactions in a month, use 0
 - Return ONLY the JSON object, nothing else`,
   });
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts }] }),
-    }
-  );
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Gemini request failed (${res.status})`);
-  }
-
-  const json = await res.json();
-  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const text = await callGemini('onboarding', { contents: [{ parts }] });
   const cleaned = text.replace(/```json|```/g, '').trim();
   return JSON.parse(cleaned) as ExtractedData;
 }
@@ -367,9 +325,10 @@ interface Step3Props {
   onIncomeChange: (d: IncomeData) => void;
   onFinancialsChange: (d: Omit<FinancialSnapshot, 'spending_breakdown'>) => void;
   onSpendingExtracted: (s: FinancialSnapshot['spending_breakdown']) => void;
+  onMonthlySpendingExtracted: (ms: { month: string; breakdown: FinancialSnapshot['spending_breakdown'] }[]) => void;
 }
 
-function Step3({ income, financials, onIncomeChange, onFinancialsChange, onSpendingExtracted }: Step3Props) {
+function Step3({ income, financials, onIncomeChange, onFinancialsChange, onSpendingExtracted, onMonthlySpendingExtracted }: Step3Props) {
   const [uploads, setUploads] = useState<Partial<Record<StatementType, UploadedFile>>>({});
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -407,9 +366,14 @@ function Step3({ income, financials, onIncomeChange, onFinancialsChange, onSpend
         has_insurance: extracted.has_insurance,
       });
       onSpendingExtracted(extracted.spending_breakdown);
+      onMonthlySpendingExtracted(extracted.monthly_spending ?? []);
       setStatus('done');
     } catch (e) {
-      setErrorMsg((e as Error).message);
+      setErrorMsg(
+        e instanceof QuotaExceededError
+          ? 'Gemini API quota exceeded. Check your usage at console.cloud.google.com or try again later.'
+          : (e as Error).message
+      );
       setStatus('error');
     }
   };
@@ -656,13 +620,16 @@ export function Onboarding() {
     has_insurance: false,
   });
   const [spendingBreakdown, setSpendingBreakdown] = useState<FinancialSnapshot['spending_breakdown'] | null>(null);
+  const [monthlySpending, setMonthlySpending] = useState<{ month: string; breakdown: FinancialSnapshot['spending_breakdown'] }[]>([]);
 
   const handleFinish = () => {
-    // Use real breakdown from statements if available, otherwise pass null and let AppContext estimate
-    setUserData(profile, income, {
-      ...financials,
-      spending_breakdown: spendingBreakdown ?? { housing: 0, food: 0, gas: 0, maintenance: 0, phone: 0, insurance: 0, debt: 0, other: 0 },
-    }, spendingBreakdown ?? undefined);
+    setUserData(
+      profile,
+      income,
+      { ...financials, spending_breakdown: spendingBreakdown ?? { housing: 0, food: 0, gas: 0, maintenance: 0, phone: 0, insurance: 0, debt: 0, other: 0 } },
+      spendingBreakdown ?? undefined,
+      monthlySpending,
+    );
     navigate('/');
   };
 
@@ -765,6 +732,7 @@ export function Onboarding() {
                   onIncomeChange={setIncome}
                   onFinancialsChange={setFinancials}
                   onSpendingExtracted={setSpendingBreakdown}
+                  onMonthlySpendingExtracted={setMonthlySpending}
                 />
               )}
             </div>

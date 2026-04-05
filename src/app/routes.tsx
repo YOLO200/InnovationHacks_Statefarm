@@ -20,7 +20,7 @@ function SpendingPage() {
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Spending Analysis</h1>
         <p className="text-gray-500 text-sm">Detailed breakdown of your monthly expenses.</p>
       </div>
-      <SpendingAnalysis data={userData ?? mockGigWorker} />
+      <SpendingAnalysis data={userData ?? mockGigWorker} showDropdown />
     </div>
   );
 }

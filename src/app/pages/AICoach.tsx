@@ -1,58 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Globe, Trash2 } from 'lucide-react';
+import { Send, Globe, Trash2, AlertTriangle } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-
-// ─── STREAMING ────────────────────────────────────────────────────────────────
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-const GEMINI_MODEL = 'gemini-2.5-flash';
-
-const streamMessage = async (
-  system: string,
-  messages: { role: string; content: string }[],
-  onToken: (t: string) => void,
-  onDone: () => void,
-  onError: (e: string) => void
-) => {
-  if (!API_KEY) { onError('API key not set. Add VITE_GEMINI_API_KEY to your .env file and restart the dev server.'); return; }
-  try {
-    const contents = messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents,
-          generationConfig: { maxOutputTokens: 1024 },
-        }),
-      }
-    );
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      onError(err?.error?.message || `Request failed (${res.status}). Check your API key.`);
-      return;
-    }
-    const data = await res.json();
-    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    if (!text) { onError('No response received from Gemini.'); return; }
-
-    // Simulate streaming by revealing the response word by word
-    const words = text.split(' ');
-    for (let i = 0; i < words.length; i++) {
-      onToken((i === 0 ? '' : ' ') + words[i]);
-      await new Promise(r => setTimeout(r, 18));
-    }
-    onDone();
-  } catch {
-    onError('Network error. Check your connection.');
-  }
-};
+import { callGemini, QuotaExceededError, isQuotaExceeded } from '../lib/gemini';
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const LANGS = [
@@ -100,6 +50,7 @@ export function AICoach() {
   const [msgs, setMsgs] = useState<Message[]>([INIT_MESSAGE]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [quotaHit, setQuotaHit] = useState(isQuotaExceeded());
   const [lang, setLang] = useState(LANGS[0]);
   const [showLangs, setShowLangs] = useState(false);
   const [showQuick, setShowQuick] = useState(true);
@@ -131,32 +82,47 @@ Coaching style:
 - Keep responses to 2–4 paragraphs with line breaks for readability
 - Acknowledge feelings before giving advice on emotional topics`;
 
-    let streamed = '';
-    await streamMessage(
-      systemPrompt,
-      historyRef.current,
-      (token) => {
-        streamed += token;
+    const contents = historyRef.current.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    try {
+      const text = await callGemini('chat', {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { maxOutputTokens: 1024 },
+      });
+
+      // Simulate word-by-word streaming
+      let streamed = '';
+      const words = text.split(' ');
+      for (let i = 0; i < words.length; i++) {
+        streamed += (i === 0 ? '' : ' ') + words[i];
         setMsgs(prev => {
           const copy = [...prev];
           copy[copy.length - 1] = { role: 'assistant', content: streamed };
           return copy;
         });
-      },
-      () => {
-        historyRef.current = [...historyRef.current, { role: 'assistant', content: streamed }];
-        setStreaming(false);
-        setTimeout(() => inputRef.current?.focus(), 100);
-      },
-      (err) => {
-        setMsgs(prev => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { role: 'assistant', content: `⚠️ ${err}` };
-          return copy;
-        });
-        setStreaming(false);
+        await new Promise(r => setTimeout(r, 18));
       }
-    );
+      historyRef.current = [...historyRef.current, { role: 'assistant', content: streamed }];
+      setQuotaHit(false);
+    } catch (err) {
+      const isQuota = err instanceof QuotaExceededError;
+      if (isQuota) setQuotaHit(true);
+      const msg = isQuota
+        ? '⚠️ API quota exceeded. Your Gemini free-tier limit has been reached. Check console.cloud.google.com to review usage or upgrade your plan.'
+        : `⚠️ ${(err as Error).message}`;
+      setMsgs(prev => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: 'assistant', content: msg };
+        return copy;
+      });
+    } finally {
+      setStreaming(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
   }, [input, streaming, lang]);
 
   const clearChat = () => {
@@ -228,6 +194,17 @@ Coaching style:
           </div>
         )}
       </div>
+
+      {/* Quota banner */}
+      {quotaHit && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
+          <span>
+            <strong>Gemini quota exceeded.</strong> Your free-tier API limit has been reached.
+            Visit <span className="font-mono text-xs">console.cloud.google.com</span> to check usage or upgrade your plan.
+          </span>
+        </div>
+      )}
 
       {/* Messages */}
       <Card className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
