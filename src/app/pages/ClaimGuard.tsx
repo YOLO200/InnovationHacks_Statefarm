@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useAppData } from '../store/AppContext';
-import { callGemini } from '../../lib/gemini';
+import { callGemini } from '../lib/gemini';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type Screen = 'input' | 'analyzing' | 'results';
