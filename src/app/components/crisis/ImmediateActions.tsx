@@ -1,49 +1,21 @@
 import { Card } from '../ui/card';
 import { Checkbox } from '../ui/checkbox';
-import { Hospital, Shield, AlertTriangle, Phone, Clock } from 'lucide-react';
+import { AlertTriangle, Clock, ShieldCheck, Info } from 'lucide-react';
 import { useState } from 'react';
 import { motion } from 'motion/react';
+import type { CrisisAction } from '../../../lib/gemini';
 
-const actions = [
-  {
-    id: 1,
-    icon: Hospital,
-    text: 'Visit nearest in-network hospital',
-    detail: 'St. Mary\'s Medical Center - 2.3 miles away',
-    urgent: true,
-  },
-  {
-    id: 2,
-    icon: Shield,
-    text: 'Use insurance provider (if available)',
-    detail: 'Call Blue Cross: 1-800-XXX-XXXX',
-    urgent: true,
-  },
-  {
-    id: 3,
-    icon: AlertTriangle,
-    text: 'Avoid high-cost ER unless critical',
-    detail: 'Consider urgent care for non-life-threatening issues',
-    urgent: false,
-  },
-  {
-    id: 4,
-    icon: Phone,
-    text: 'Inform emergency contact',
-    detail: 'Jane Doe - (555) 123-4567',
-    urgent: false,
-  },
-];
+interface ImmediateActionsProps {
+  actions?: CrisisAction[];
+}
 
-export function ImmediateActions() {
+export function ImmediateActions({ actions = [] }: ImmediateActionsProps) {
   const [completed, setCompleted] = useState<number[]>([]);
 
   const toggleAction = (id: number) => {
-    if (completed.includes(id)) {
-      setCompleted(completed.filter(i => i !== id));
-    } else {
-      setCompleted([...completed, id]);
-    }
+    setCompleted(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   };
 
   return (
@@ -56,30 +28,35 @@ export function ImmediateActions() {
           <h3 className="text-lg font-semibold text-gray-900">Immediate Actions</h3>
           <p className="text-sm text-gray-600">Follow these steps in order</p>
         </div>
+        <div className="ml-auto text-sm text-gray-500">
+          {completed.length}/{actions.length} done
+        </div>
       </div>
 
       <div className="space-y-3">
         {actions.map((action, index) => {
-          const Icon = action.icon;
-          const isCompleted = completed.includes(action.id);
-          
+          const isCompleted = completed.includes(index);
+          const Icon = action.urgent ? (index === 0 ? ShieldCheck : AlertTriangle) : Info;
+
           return (
             <motion.div
-              key={action.id}
+              key={index}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.1 }}
               className={`relative pl-8 ${index !== actions.length - 1 ? 'pb-6' : ''}`}
             >
-              {/* Timeline Line */}
+              {/* Timeline line */}
               {index !== actions.length - 1 && (
                 <div className="absolute left-3.5 top-8 w-0.5 h-full bg-red-200" />
               )}
-              
-              {/* Timeline Dot */}
-              <div className={`absolute left-0 top-1 w-7 h-7 rounded-full flex items-center justify-center ${
-                isCompleted ? 'bg-green-500' : action.urgent ? 'bg-red-500' : 'bg-gray-300'
-              }`}>
+
+              {/* Timeline dot */}
+              <div
+                className={`absolute left-0 top-1 w-7 h-7 rounded-full flex items-center justify-center ${
+                  isCompleted ? 'bg-green-500' : action.urgent ? 'bg-red-500' : 'bg-gray-300'
+                }`}
+              >
                 {isCompleted ? (
                   <span className="text-white text-xs">✓</span>
                 ) : (
@@ -95,15 +72,11 @@ export function ImmediateActions() {
                     ? 'bg-white border-red-300 shadow-sm'
                     : 'bg-white border-gray-200'
                 }`}
-                onClick={() => toggleAction(action.id)}
+                onClick={() => toggleAction(index)}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-lg ${
-                    action.urgent ? 'bg-red-100' : 'bg-gray-100'
-                  }`}>
-                    <Icon className={`w-5 h-5 ${
-                      action.urgent ? 'text-red-600' : 'text-gray-600'
-                    }`} />
+                  <div className={`p-2 rounded-lg ${action.urgent ? 'bg-red-100' : 'bg-gray-100'}`}>
+                    <Icon className={`w-5 h-5 ${action.urgent ? 'text-red-600' : 'text-gray-600'}`} />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
@@ -120,7 +93,7 @@ export function ImmediateActions() {
                   </div>
                   <Checkbox
                     checked={isCompleted}
-                    onCheckedChange={() => toggleAction(action.id)}
+                    onCheckedChange={() => toggleAction(index)}
                   />
                 </div>
               </div>
