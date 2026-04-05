@@ -42,9 +42,15 @@ export interface DerivedMetrics {
   financial_health_score: number;    // 0–100
 }
 
+export interface MonthlySpending {
+  month: string;          // e.g. "June 2024"
+  breakdown: SpendingBreakdown;
+}
+
 export interface GigWorkerData {
   profile: WorkProfile;
   income: IncomeData;
   financials: FinancialSnapshot;
   derived: DerivedMetrics;
+  monthly_spending: MonthlySpending[]; // all months from uploaded statements, newest first
 }

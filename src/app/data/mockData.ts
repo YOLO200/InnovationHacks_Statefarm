@@ -34,4 +34,5 @@ export const mockGigWorker: GigWorkerData = {
     cash_runway_days: Math.round(1200 / (1850 / 30)), // ~19 days
     financial_health_score: 28,
   },
+  monthly_spending: [],
 };

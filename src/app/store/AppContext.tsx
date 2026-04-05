@@ -52,7 +52,7 @@ export function estimateSpending(
 interface AppContextType {
   userData: GigWorkerData | null;
   isOnboarded: boolean;
-  setUserData: (profile: WorkProfile, income: IncomeData, financials: FinancialSnapshot, realSpending?: SpendingBreakdown) => void;
+  setUserData: (profile: WorkProfile, income: IncomeData, financials: FinancialSnapshot, realSpending?: SpendingBreakdown, monthlySpending?: { month: string; breakdown: SpendingBreakdown }[]) => void;
   resetData: () => void;
 }
 
@@ -67,12 +67,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { return null; }
   });
 
-  const setUserData = (profile: WorkProfile, income: IncomeData, financials: FinancialSnapshot, realSpending?: SpendingBreakdown) => {
+  const setUserData = (profile: WorkProfile, income: IncomeData, financials: FinancialSnapshot, realSpending?: SpendingBreakdown, monthlySpending: { month: string; breakdown: SpendingBreakdown }[] = []) => {
     // Use real spending from bank statements if available, otherwise estimate from work type
     const spending = realSpending ?? estimateSpending(profile.work_type, financials.fixed_expenses, financials.debt_payments, financials.has_insurance);
     const fullFinancials: FinancialSnapshot = { ...financials, spending_breakdown: spending };
     const derived = computeDerived(income, fullFinancials);
-    const data: GigWorkerData = { profile, income, financials: fullFinancials, derived };
+    const data: GigWorkerData = { profile, income, financials: fullFinancials, derived, monthly_spending: monthlySpending };
     setUserDataState(data);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   };
