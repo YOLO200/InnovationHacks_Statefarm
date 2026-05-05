@@ -8,7 +8,7 @@ Crunch is a financial resilience dashboard built specifically for gig economy wo
 
 ## The Problem
 
-Gig workers earn unpredictably, pay self-employment taxes quarterly, have no employer benefits, and are one platform deactivation away from $0 income. Traditional financial apps were built for salaried employees. Crunch was built for everyone else.
+Gig workers earn unpredictably, pay self-employment taxes quarterly, have no employer benefits, and are one platform deactivation away from $0 or marginal income. Traditional financial apps were built for salaried employees. Crunch was built for everyone else.
 
 ---
 
